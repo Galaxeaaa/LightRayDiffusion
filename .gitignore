@@ -1,0 +1,10 @@
+__pycache__
+/data
+/tmp
+/*.mp4
+/*.exr
+/*.png
+/convert_xml_test
+/emitter
+.vscode
+/test
