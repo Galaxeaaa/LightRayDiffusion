@@ -1,5 +1,14 @@
 # Learning a Near-Field Illumination Prior for Inverse Rendering
 
+## Installation
+
+All experiments are run in a conda environment with Python 3.10.
+
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install -r requirements.txt
+```
+
 ## Introduction
 
 The goal of this project is to learn a near-field illumination prior for inverse rendering. The near-field illumination prior is a function that takes an image as input and outputs the illumination in the scene in which the image is captured. The near-field illumination prior is learned from a dataset of images of indoor scenes called [OpenRooms](https://vilab-ucsd.github.io/ucsd-openrooms/) under different lighting conditions.

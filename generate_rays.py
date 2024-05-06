@@ -1,19 +1,22 @@
+import json
+import os
+
 import drjit as dr
 import mitsuba as mi
-import os
-from utils.visualization import display
 import numpy as np
+
+from utils.visualization import display
 
 mi.set_variant("cuda_ad_rgb")
 
 from dataloader.convert_xml import convertXML2Dict
-from dataloader.openrooms import get_dataloader, OpenRoomDemoSceneData
-from PluckerRay import PluckerRay
+from dataloader.openrooms import OpenRoomDemoSceneData, get_dataloader
+from utils.PluckerRay import PluckerRay
 
 
 def generateRay2Light(u, v, fov, aspect_ratio, cam_pos, light_pos, camera_extrinsics, scene):
     """
-    u, v: pixel coordinates starting from top-left corner
+    u, v: pixel coordinates starting from top-left corner. u is the vertical coordinate and v is the horizontal coordinate.
     """
     # compute ray from camera to pixel in camera space
     cam_ray_dir = np.array(
@@ -58,7 +61,14 @@ def readRaysFromFile(filename):
         for line in f:
             ray = line.strip().split(" ")
             rays.append(
-                [float(ray[0]), float(ray[1]), float(ray[2]), float(ray[3]), float(ray[4]), float(ray[5])]
+                [
+                    float(ray[0]),
+                    float(ray[1]),
+                    float(ray[2]),
+                    float(ray[3]),
+                    float(ray[4]),
+                    float(ray[5]),
+                ]
             )
 
     return rays
@@ -70,12 +80,12 @@ if __name__ == "__main__":
     xml_filename = os.path.join(cwd, "test.xml")
     gt_filename = os.path.join(cwd, "test_gt_wall_noenv.exr")
     idx_view = 0
-    res_h = 480
-    res_w = 640
-    patch_res_h = 10
-    patch_res_w = 10
-    cell_h = res_h // patch_res_h
-    cell_w = res_w // patch_res_w
+    res_h = 420
+    res_w = 560
+    num_patches_y = 10
+    num_patches_x = 10
+    cell_h = res_h // num_patches_y
+    cell_w = res_w // num_patches_x
 
     dataset = OpenRoomDemoSceneData(data_dir=data_dir)
     cam_lookat_mat = dataset[idx_view]["camera_lookat_mat"]
@@ -88,14 +98,6 @@ if __name__ == "__main__":
     scene_dict["sensor"]["film"]["width"] = res_w
     scene_dict.pop("env_emitter")
     scene_dict["integrator"]["type"] = "prb"
-    camera_extrinsics = mi.Transform4f.look_at(
-        origin=cam_lookat_mat[0], target=cam_lookat_mat[1], up=cam_lookat_mat[2]
-    )
-    camera_projection = mi.Transform4f.perspective(
-        fov=scene_dict["sensor"]["fov"],
-        near=1e-2,  # default
-        far=1e4,  # default
-    )
 
     for obj in scene_dict.values():
         if "emitter" in obj:
@@ -106,87 +108,79 @@ if __name__ == "__main__":
         "position": light_center,
         "intensity": {
             "type": "rgb",
-            "value": [5, 5, 5],
+            "value": [1, 1, 1],
         },
     }
 
     # generate gt rays for light ray diffusion
-    depth = dataset[idx_view]["depth"]
+    for i in range(len(dataset)):
+        cam_lookat_mat = dataset[i]["camera_lookat_mat"]
+        scene_dict["sensor"]["to_world"] = mi.ScalarTransform4f.look_at(
+            origin=cam_lookat_mat[0], target=cam_lookat_mat[1], up=cam_lookat_mat[2]
+        )
+        scene = mi.load_dict(scene_dict)
+        rays = []
+        for x in range(num_patches_y):
+            for y in range(num_patches_x):
+                x_ = x * cell_h + cell_h // 2
+                y_ = y * cell_w + cell_w // 2
+                u = x_ / res_h
+                v = y_ / res_w
+                ray, pixel_pos = generateRay2Light(
+                    u=u,
+                    v=v,
+                    fov=scene_dict["sensor"]["fov"],
+                    aspect_ratio=res_h / res_w,
+                    cam_pos=cam_lookat_mat[0],
+                    camera_extrinsics=mi.Transform4f.look_at(
+                        origin=cam_lookat_mat[0], target=cam_lookat_mat[1], up=cam_lookat_mat[2]
+                    ),
+                    light_pos=light_center,
+                    scene=scene,
+                )
+                if ray is None or pixel_pos is None:
+                    ray = PluckerRay(direction=np.array([0, 0, 0]), moment=np.array([0, 0, 0]))
+                rays.append(ray)
+                # # validate ray
+                # light_pos = np.array(light_center)
+                # ray_dir = light_pos - pixel_pos
+                # ray_dir = ray_dir / np.linalg.norm(ray_dir)
+                # print(np.dot(ray.direction, ray_dir))
+                # m_ = np.cross(pixel_pos, ray_dir)
+                # print(f"m: {ray.moment}, m_: {m_}")
 
-    scene = mi.load_dict(scene_dict)
-    rays = []
-    for x in range(patch_res_h):
-        for y in range(patch_res_w):
-            x_ = x * cell_h + cell_h // 2
-            y_ = y * cell_w + cell_w // 2
-            u = x_ / res_h
-            v = y_ / res_w
-            ray, pixel_pos = generateRay2Light(
-                u=u,
-                v=v,
-                fov=scene_dict["sensor"]["fov"],
-                aspect_ratio=res_h / res_w,
-                cam_pos=cam_lookat_mat[0],
-                camera_extrinsics=mi.Transform4f.look_at(
-                    origin=cam_lookat_mat[0], target=cam_lookat_mat[1], up=cam_lookat_mat[2]
-                ),
-                light_pos=light_center,
-                scene=scene,
-            )
-            if ray is None or pixel_pos is None:
-                ray = PluckerRay(direction=np.array([0, 0, 0]), moment=np.array([0, 0, 0]))
-            rays.append(ray)
-            # # validate ray
-            # light_pos = np.array(light_center)
-            # ray_dir = light_pos - pixel_pos
-            # ray_dir = ray_dir / np.linalg.norm(ray_dir)
-            # print(np.dot(ray.direction, ray_dir))
-            # m_ = np.cross(pixel_pos, ray_dir)
-            # print(f"m: {ray.moment}, m_: {m_}")
+        # write data to file
+        data_dir = os.path.join(cwd, "data", "RayDiffusionData", "main_xml", "scene0001_01")
+        os.makedirs(data_dir, exist_ok=True)
 
-    # write ray information to file
-    ray_file = os.path.join(cwd, "rays_test.txt")
-    with open(ray_file, "w") as f:
-        for ray in rays:
-            f.write(
-                f"{ray.direction[0]} {ray.direction[1]} {ray.direction[2]} {ray.moment[0]} {ray.moment[1]} {ray.moment[2]}\n"
-            )
-    exit(0)
+        # write parameters to json file
+        parameters = {
+            "num_patches_x": num_patches_x,
+            "num_patches_y": num_patches_y,
+            "num_images": len(dataset),
+        }
+        json_file = os.path.join(data_dir, f"params.json")
+        with open(json_file, "w") as f:
+            json.dump(parameters, f, sort_keys=True, indent=4)
+        exit(0)
 
-    scene_dict["x_axis"] = {
-        "type": "cylinder",
-        "p0": [0, 0, 0],
-        "p1": [1, 0, 0],
-        "radius": 0.01,
-        "material": {
-            "type": "diffuse",
-            "reflectance": {"type": "rgb", "value": [1, 0, 0]},
-        },
-    }
-    scene_dict["y_axis"] = {
-        "type": "cylinder",
-        "p0": [0, 0, 0],
-        "p1": [0, 1, 0],
-        "radius": 0.01,
-        "material": {
-            "type": "diffuse",
-            "reflectance": {"type": "rgb", "value": [0, 1, 0]},
-        },
-    }
-    scene_dict["z_axis"] = {
-        "type": "cylinder",
-        "p0": [0, 0, 0],
-        "p1": [0, 0, 1],
-        "radius": 0.01,
-        "material": {
-            "type": "diffuse",
-            "reflectance": {"type": "rgb", "value": [0, 0, 1]},
-        },
-    }
+        # write ground truth ray information
+        print("Writing ground truth rays to file...", end="")
+        ray_dir = os.path.join(data_dir, "rays")
+        os.makedirs(ray_dir, exist_ok=True)
+        ray_file = os.path.join(ray_dir, f"rays{i}.txt")
+        with open(ray_file, "w") as f:
+            for ray in rays:
+                f.write(
+                    f"{ray.direction[0]} {ray.direction[1]} {ray.direction[2]} {ray.moment[0]} {ray.moment[1]} {ray.moment[2]}\n"
+                )
+        print("Done.")
 
-    # load scene
-    scene = mi.load_dict(scene_dict)
-    # gt_image = mi.Bitmap(gt_filename)
-    print("Rendering ground truth image.")
-    gt_image = mi.render(scene, spp=512, seed=0)
-    display(mi.util.convert_to_bitmap(gt_image))
+        # write ground truth rendering image
+        print("Rendering ground truth image...", end="")
+        gt_image = mi.render(scene, spp=512, seed=0)
+        image_dir = os.path.join(data_dir, "images")
+        os.makedirs(image_dir, exist_ok=True)
+        image_file = os.path.join(image_dir, f"image{i}.exr")
+        mi.util.write_bitmap(image_file, gt_image, "rgb")
+        print("Done.")

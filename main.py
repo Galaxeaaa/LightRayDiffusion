@@ -11,7 +11,6 @@ from pprint import pprint
 from tqdm import tqdm, trange
 
 import torch
-import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 
 from dataloader.openrooms import get_dataloader, OpenRoomDemoSceneData
@@ -19,7 +18,6 @@ from dataloader.openrooms import get_dataloader, OpenRoomDemoSceneData
 # from util.img_utils import clear_color, mask_generator,to_output,imwrite
 # from util.logger import get_logger
 import numpy as np
-from torchvision.transforms.functional import adjust_gamma
 
 import imageio
 from dataloader.convert_xml import convertXML2Dict
