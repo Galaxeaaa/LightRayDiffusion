@@ -17,7 +17,7 @@ def get_dataloader(dataset: Dataset, batch_size: int, num_workers: int, train: b
     return dataloader
 
 
-class OpenRoomDemoSceneData(Dataset):
+class OpenRoomsDemoSceneData(Dataset):
     def __init__(self, data_dir: str):
         self.images = [os.path.normpath(i) for i in glob(data_dir + "/im_*.hdr")]
         self.n_views = len(self.images)
@@ -140,4 +140,32 @@ class OpenRoomDemoSceneData(Dataset):
                     look_at_mat[i] = list(map(float, fIn.readline().split()))
                 camera_lookat_mats.append(look_at_mat)
 
-        return camera_lookat_mats # [origin, lookat, up]: 3x3
+        return camera_lookat_mats  # [origin, lookat, up]: 3x3
+
+
+class OpenRoomsSceneData(Dataset):
+    def __init__(self, data_dir: str):
+        self.scene_xml = data_dir + "/main.xml"
+        self.camera_lookat_mats = self.loadCameras(data_dir + "/cam.txt")
+        self.n_views = len(self.camera_lookat_mats)
+
+    def __len__(self):
+        return self.n_views
+
+    def __getitem__(self, idx):
+        return {
+            "scene_xml": self.scene_xml,
+            "camera_lookat_mat": self.camera_lookat_mats[idx],
+        }
+
+    def loadCameras(self, data_dir: str):
+        camera_lookat_mats = []
+        with open(data_dir, "r") as fIn:
+            n_cams = int(fIn.readline())
+            for _ in range(n_cams):
+                look_at_mat = np.zeros((3, 3))
+                for i in range(3):
+                    look_at_mat[i] = list(map(float, fIn.readline().split()))
+                camera_lookat_mats.append(look_at_mat)
+
+        return camera_lookat_mats  # [origin, lookat, up]: 3x3

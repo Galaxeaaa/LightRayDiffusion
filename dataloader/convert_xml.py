@@ -204,42 +204,87 @@ def convertXML2Dict(xml_path, tmp_dir="tmp/"):
     # Modify the XML elements
     for bsdf in root.findall('.//bsdf[@type="microfacet"]'):
         bsdf_id = bsdf.get("id")
-        uvscale_value = float(bsdf.find('float[@name="uvScale"]').get("value"))
-        albedo_filename = bsdf.find('texture[@name="albedo"]/string[@name="filename"]').get("value")
-        normal_filename = bsdf.find('texture[@name="normal"]/string[@name="filename"]').get("value")
-        roughness_filename = bsdf.find('texture[@name="roughness"]/string[@name="filename"]').get(
-            "value"
-        )
+        uvscale = bsdf.find('float[@name="uvScale"]')
+        if uvscale is not None:
+            uvscale_value = float(uvscale.get("value"))
+        else:
+            uvscale_value = 1.0
 
-        # Replace the path before "Material..." with "data/SubstanceBRDF"
-        albedo_filename = re.sub(r"^(.+?)?(?=Material)", "data/SubstanceBRDF/", albedo_filename)
-        normal_filename = re.sub(r"^(.+/)?(?=Material)", "data/SubstanceBRDF/", normal_filename)
-        roughness_filename = re.sub(
-            r"^(.+/)?(?=Material)", "data/SubstanceBRDF/", roughness_filename
-        )
+        albedo_filename = None
+        albedo_rgb = None
+        albedo_texture = bsdf.find('texture[@name="albedo"]')
+        if albedo_texture is not None:
+            albedo_filename = bsdf.find('texture[@name="albedo"]/string[@name="filename"]').get(
+                "value"
+            )
+            albedo_filename = re.sub(r"^(.+?)?(?=Material)", "data/SubstanceBRDF/", albedo_filename)
+        albedo_rgb = bsdf.find('rgb[@name="albedo"]')
+        if albedo_rgb is not None:
+            albedo_rgb = bsdf.find('rgb[@name="albedo"]').get("value")
 
+        normal_texture = bsdf.find('texture[@name="normal"]')
+        if normal_texture is not None:
+            normal_filename = normal_texture.find('string[@name="filename"]').get("value")
+            normal_filename = re.sub(r"^(.+/)?(?=Material)", "data/SubstanceBRDF/", normal_filename)
+
+        roughness_filename = None
+        roughness_value = None
+        roughness_texture = bsdf.find('texture[@name="roughness"]')
+        if roughness_texture is not None:
+            roughness_filename = bsdf.find(
+                'texture[@name="roughness"]/string[@name="filename"]'
+            ).get("value")
+            roughness_filename = re.sub(
+                r"^(.+/)?(?=Material)", "data/SubstanceBRDF/", roughness_filename
+            )
+        roughness_float = bsdf.find('float[@name="roughness"]')
+        if roughness_float is not None:
+            roughness_value = bsdf.find('float[@name="roughness"]').get("value")
+
+        if albedo_filename is not None:
+            base_color = {
+                "type": "bitmap",
+                "filename": albedo_filename,
+                "to_uv": mi.ScalarTransform4f.scale([uvscale_value, uvscale_value, 1]),
+            }
+        elif albedo_rgb is not None:
+            base_color = {"type": "rgb", "value": [float(x) for x in albedo_rgb.split()]}
+        else:
+            raise Exception(f"No albedo found for bsdf {bsdf_id} in {xml_path}.")
+
+        if roughness_filename is not None:
+            roughness = {
+                "type": "bitmap",
+                "filename": roughness_filename,
+                "to_uv": mi.ScalarTransform4f.scale([uvscale_value, uvscale_value, 1]),
+            }
+        elif roughness_float is not None:
+            roughness = {"type": "float", "value": float(roughness_value)}
+        else:
+            raise Exception(f"No roughness found for bsdf {bsdf_id} in {xml_path}.") 
         # Create the new XML structure
-        new_bsdf = etree.Element("bsdf", attrib={"id": bsdf_id, "type": "twosided"})
-        new_bsdf = {
-            "type": "twosided",
-            "material": {
-                "type": "normalmap",
-                "normalmap": {"type": "bitmap", "raw": True, "filename": normal_filename},
-                "bsdf": {
-                    "type": "principled",
-                    "base_color": {
-                        "type": "bitmap",
-                        "filename": albedo_filename,
-                        "to_uv": mi.ScalarTransform4f.scale([uvscale_value, uvscale_value, 1]),
-                    },
-                    "roughness": {
-                        "type": "bitmap",
-                        "filename": roughness_filename,
-                        "to_uv": mi.ScalarTransform4f.scale([uvscale_value, uvscale_value, 1]),
+        if normal_texture is not None:
+            new_bsdf = {
+                "type": "twosided",
+                "material": {
+                    "type": "normalmap",
+                    "normalmap": {"type": "bitmap", "raw": True, "filename": normal_filename},
+                    "bsdf": {
+                        "type": "principled",
+                        "base_color": base_color,
+                        "roughness": roughness,
                     },
                 },
-            },
-        }
+            }
+        else:
+            new_bsdf = {
+                "type": "twosided",
+                "material": {
+                    "type": "principled",
+                    "base_color": base_color,
+                    "roughness": roughness,
+                },
+            }
 
         scene_dict[bsdf_id] = new_bsdf
 
@@ -376,7 +421,7 @@ def convertXML2Dict(xml_path, tmp_dir="tmp/"):
                 "type": film.get("type"),
                 "width": int(film.find(".//integer[@name='width']").get("value")),
                 "height": int(film.find(".//integer[@name='height']").get("value")),
-                'sample_border': True,
+                "sample_border": True,
             },
             "sampler": {"type": "multijitter", "sample_count": sample_count},
         }
@@ -396,4 +441,3 @@ def convertXML2Dict(xml_path, tmp_dir="tmp/"):
         scene_dict["env_emitter"] = new_env_emitter
 
     return scene_dict
-

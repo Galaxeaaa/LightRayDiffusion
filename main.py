@@ -13,7 +13,7 @@ from tqdm import tqdm, trange
 import torch
 import matplotlib.pyplot as plt
 
-from dataloader.openrooms import get_dataloader, OpenRoomDemoSceneData
+from dataloader.openrooms import get_dataloader, OpenRoomsDemoSceneData
 
 # from util.img_utils import clear_color, mask_generator,to_output,imwrite
 # from util.logger import get_logger
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     idx_view = 0
     voxel_res = 5
 
-    dataset = OpenRoomDemoSceneData(data_dir="data/Demo/main_xml/scene0001_01")
+    dataset = OpenRoomsDemoSceneData(data_dir="data/Demo/main_xml/scene0001_01")
     cam_lookat_mat = dataset[idx_view]["camera_lookat_mat"]
     scene_dict = convertXML2Dict(xml_filename)
 

@@ -22,16 +22,17 @@ def intersect_skew_lines_high_dim(p, r, mask=None):
     # p_intersect = np.linalg.lstsq(I_min_cov.sum(dim=-3).numpy(), sum_proj.numpy(), rcond=None)[0]
 
     if torch.any(torch.isnan(p_intersect)):
-        print(p_intersect)
+        print("Warning: intersect_skew_lines_high_dim: p_intersect is nan")
         return None, None
     return p_intersect, r
 
 def pluckerRays2Point(plucker_rays):
     rays = torch.tensor(plucker_rays)
+    mask = torch.linalg.norm(rays[..., :3], dim=-1) > 1e-6
     d = rays[..., :3]
     m = rays[..., 3:]
-    p = torch.cross(d, m)
-    p_intersect, _ = intersect_skew_lines_high_dim(p, d)
+    p = torch.cross(d, m, dim=-1)
+    p_intersect, _ = intersect_skew_lines_high_dim(p, d, mask)
 
     return p_intersect
 

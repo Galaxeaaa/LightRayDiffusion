@@ -14,6 +14,9 @@ class PluckerRay:
     def __repr__(self):
         return f"PluckerRay({self.direction}, {self.moment})"
 
+    def data(self):
+        return [*self.direction, *self.moment]
+
     @classmethod
     def from_point_direction(cls, point, direction):
         """

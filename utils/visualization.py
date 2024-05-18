@@ -8,6 +8,20 @@ import torch
 from PIL import Image
 
 
+def visualizeRays(rays):
+    '''
+    rays: (H, W, 6), H = num_patches_y, W = num_patches_x
+    '''
+    rays = np.array(rays)
+    direction_imgs = rays[..., :3]
+    moment_imgs = rays[..., 3:]
+    images = np.concatenate([direction_imgs, moment_imgs], axis=-2)
+    images = (images + 1) * 255 // 2
+    images = images.astype(np.uint8)
+
+    return images  # (N, H, W, 6)
+
+
 def unnormalize_image(image):
     if isinstance(image, torch.Tensor):
         image = image.cpu().numpy()
@@ -115,6 +129,7 @@ def view_color_coded_images_from_path(image_dir):
             axs[i].axis("off")
     plt.tight_layout()
     return fig, num_frames
+
 
 def display(image):
     plt.axis("off")
