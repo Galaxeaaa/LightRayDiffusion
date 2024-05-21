@@ -16,7 +16,7 @@ class RayDiffusionData(Dataset):
         num_patches_x, num_patches_y = 0, 0
         scene_dirs = glob(os.path.join(data_dir, "scene*"))
         scene_dirs = sorted(scene_dirs)
-        scene_dirs = scene_dirs[:1]
+        # scene_dirs = scene_dirs[:1]
         for scene_dir in scene_dirs:
             light_dirs = glob(os.path.join(scene_dir, "light*"))
             light_dirs = sorted(light_dirs)
@@ -25,7 +25,6 @@ class RayDiffusionData(Dataset):
             #     if split == "train"
             #     else light_dirs[int(len(light_dirs) * 0.8) :]
             # )
-            light_dirs = light_dirs[:1]
             for light_dir in light_dirs:
                 params_file = os.path.join(light_dir, "params.json")
                 with open(params_file, "r") as f:
@@ -33,8 +32,18 @@ class RayDiffusionData(Dataset):
                     num_images = params["num_images"]
                     num_patches_x = params["num_patches_x"]
                     num_patches_y = params["num_patches_y"]
+
+                if split == "train":
+                    idx_range = range(int(num_images * 0.8))
+                elif split == "val":
+                    idx_range = range(int(num_images * 0.8), num_images)
+                elif split == "all":
+                    idx_range = range(num_images)
+                else:
+                    raise ValueError(f"Split \"{split}\" not recognized.")
+
                 for image_file in [
-                    os.path.join(light_dir, f"image{i}.exr") for i in range(num_images)
+                    os.path.join(light_dir, f"image{i}.exr") for i in idx_range
                 ]:
                     self.image_file_list.append(image_file)
         if num_patches_x == 0 or num_patches_y == 0:
@@ -42,7 +51,7 @@ class RayDiffusionData(Dataset):
         self.num_patches_x = num_patches_x
         self.num_patches_y = num_patches_y
 
-        print(f"Loaded {len(self)} images from {len(scene_dirs)} scenes.")
+        print(f"Loaded RayDiffusion {split} data from {data_dir}. Totally {len(self)} images from {len(scene_dirs)} scenes.")
 
     def __len__(self):
         return len(self.image_file_list)
@@ -62,7 +71,7 @@ class RayDiffusionData(Dataset):
 
         image = imageio.imread(image_file)
         image = np.array(image, dtype=np.float32)
-        rays = readRaysFromFile(rays_file)
+        rays, origin = readRaysFromFile(rays_file)
         rays = np.array(rays, dtype=np.float32)
 
         scene_name = os.path.basename(os.path.dirname(parent_dir))
@@ -76,4 +85,4 @@ class RayDiffusionData(Dataset):
             ]
             camera_lookat_mat = np.array(camera_lookat_mat)
 
-        return image, rays, light_center, camera_lookat_mat
+        return image, rays, light_center, camera_lookat_mat, origin
