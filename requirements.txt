@@ -6,3 +6,4 @@ lxml
 opencv-python
 xformers
 imageio
+colorama
