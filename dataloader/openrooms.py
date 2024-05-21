@@ -3,7 +3,6 @@ from PIL import Image
 from typing import Callable, Optional
 from torch.utils.data import DataLoader, Dataset
 import numpy as np
-import cv2
 import os
 import imageio
 import struct

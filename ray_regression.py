@@ -4,6 +4,7 @@ import json
 import os
 from datetime import datetime
 
+os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 import imageio
 
 # from inference.predict import predict_cameras
