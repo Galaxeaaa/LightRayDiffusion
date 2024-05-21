@@ -4,6 +4,5 @@ timm
 matplotlib
 lxml
 opencv-python
-xformers
 imageio
 colorama
