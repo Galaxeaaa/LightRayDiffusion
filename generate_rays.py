@@ -129,7 +129,7 @@ if __name__ == "__main__":
         scene_names = f.readlines()
         scene_names = [scene_name.strip() for scene_name in scene_names]
 
-    for scene_name in scene_names[9:]:
+    for scene_name in scene_names[9:10]:
         print(f"Generating data for scene {scene_name}...")
         data_dir = os.path.join(cwd, "data/scenes_on_cluster/xml", scene_name)
         xml_filename = os.path.join(data_dir, "main.xml")
@@ -172,26 +172,26 @@ if __name__ == "__main__":
         for i_light in range(num_lights_per_scene):
             params = mi.traverse(scene)
             light_RG = np.random.uniform(2, 10)
-            light_B = np.random.uniform(1, light_RG * 1.1)
+            light_B = np.random.uniform(light_RG * 0.5, light_RG * 1.1)
             params["emitter_opt.intensity.value"] = [light_RG, light_RG, light_B]
 
             # light_RG = 5
             # light_B = 5
             # light_center = np.array([0.0, 0.0, 0.0])
 
-            # Load light center from file
-            params_dir = os.path.join(
-                cwd,
-                "data",
-                "RayDiffusionData",
-                data_group_name,
-                scene_name,
-                f"light{i_light}",
-                "params.json",
-            )
-            with open(params_dir, "r") as f:
-                jsonfile = json.load(f)
-                light_center = jsonfile["light_center"]
+            # # Load light center from file
+            # params_dir = os.path.join(
+            #     cwd,
+            #     "data",
+            #     "RayDiffusionData",
+            #     data_group_name,
+            #     scene_name,
+            #     f"light{i_light}",
+            #     "params.json",
+            # )
+            # with open(params_dir, "r") as f:
+            #     jsonfile = json.load(f)
+            #     light_center = jsonfile["light_center"]
 
             # Try to render an image to check if the light at valid position
             camera_lookat_mat = dataset[0]["camera_lookat_mat"]
@@ -200,22 +200,22 @@ if __name__ == "__main__":
             )
             params.update()
 
-            # print(f"Trying to render an image...")
-            # centers = []
-            # while True:
-            #     light_center = [
-            #         np.random.uniform(-5, 5),
-            #         np.random.uniform(-2, 2),
-            #         np.random.uniform(-5, 5),
-            #     ]
-            #     params["emitter_opt.position"] = light_center
-            #     params.update()
-            #     try_image = mi.render(scene, spp=35)
-            #     try_image = np.array(try_image, dtype=np.float32)
-            #     avg_color = np.mean(try_image, axis=(0, 1))
-            #     if np.all(avg_color > 0.01):
-            #         centers.append(light_center)
-            #         break
+            print(f"Trying to render an image...")
+            centers = []
+            while True:
+                light_center = [
+                    np.random.uniform(-5, 5),
+                    np.random.uniform(-2, 2),
+                    np.random.uniform(-5, 5),
+                ]
+                params["emitter_opt.position"] = light_center
+                params.update()
+                try_image = mi.render(scene, spp=35)
+                try_image = np.array(try_image, dtype=np.float32)
+                avg_color = np.mean(try_image, axis=(0, 1))
+                if np.all(avg_color > 0.01):
+                    centers.append(light_center)
+                    break
 
             # # [TEMP] find bounding box of light centers
             # centers = np.array(centers)
@@ -234,7 +234,7 @@ if __name__ == "__main__":
             output_dir = os.path.join(
                 cwd, "data", "RayDiffusionData", data_group_name, scene_name, f"light{i_light}"
             )
-            # output_dir = os.path.join("test_output_2", scene_name, f"light{i_light}")
+            output_dir = os.path.join("test_output_2", scene_name, f"light{i_light}")
             os.makedirs(output_dir, exist_ok=True)
 
             origins = []
@@ -266,7 +266,6 @@ if __name__ == "__main__":
                             scene=scene,
                         )
                         pixel_positions.append(pixel_pos)
-                        dr.cuda.ad.Float()
                         # if ray is None or pixel_pos is None:
                         #     ray = PluckerRay(
                         #         direction=np.array([0, 0, 0]), moment=np.array([0, 0, 0])
@@ -346,11 +345,10 @@ if __name__ == "__main__":
                 # print("loss: ", np.linalg.norm(center - light_center))
                 # print()
 
-                # # Render ground truth image
-                # scene = mi.load_dict(scene_dict)
-                # gt_image = mi.render(scene, spp=528, seed=0)
-                # image_file = os.path.join(output_dir, f"image{i_view}.exr")
-                # mi.util.write_bitmap(image_file, gt_image, "rgb")
+                # Render ground truth image
+                gt_image = mi.render(scene, spp=528, seed=0)
+                image_file = os.path.join(output_dir, f"image{i_view}.exr")
+                mi.util.write_bitmap(image_file, gt_image, "rgb")
 
             # write parameters to json file
             parameters = {
