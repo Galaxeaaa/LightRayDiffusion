@@ -1,4 +1,4 @@
-# Learning a Near-Field Illumination Prior for Inverse Rendering
+# Light Ray Diffusion
 
 ## TODO
 
@@ -15,19 +15,25 @@
     - [ ] Randomly use 80% of images and rays in each scene for training.
     - [ ] Render ground truth for more random light sources and train on 80% of the light sources. This is to test performance on unseen light sources but seen scenes.
 - [ ] Generate ground truth using depth maps and 3D light source bounding box ground truth in OpenRooms.
+- [ ] Add ray diffusion model.
 
 ## Installation
 
-All experiments are run in a conda environment with Python 3.10.
+All experiments are run in a conda environment with Python 3.10 and CUDA 11.8. To install the dependencies, run the following commands:
 
 ```bash
+conda create -n lrd python=3.10
+conda activate lrd
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+pip install -U xformers --index-url https://download.pytorch.org/whl/cu118
 pip install -r requirements.txt
 ```
 
 ## Introduction
 
-The goal of this project is to learn a near-field illumination prior for inverse rendering. The near-field illumination prior is a function that takes an image as input and outputs the illumination in the scene in which the image is captured. The near-field illumination prior is learned from a dataset of images of indoor scenes called [OpenRooms](https://vilab-ucsd.github.io/ucsd-openrooms/) under different lighting conditions.
+The original goal of this project is to learn a near-field illumination prior for inverse rendering. The near-field illumination prior is a function that takes an image as input and outputs the illumination in the scene in which the image is captured. The near-field illumination prior is learned from a dataset of images of indoor scenes called [OpenRooms](https://vilab-ucsd.github.io/ucsd-openrooms/) under different lighting conditions.
+
+However, we found that the near-field illumination prior is a highly non-linear function of the image, and a simple neural network is not expressive enough to capture the complex relationship between the image and the illumination in the scene. Therefore, we are exploring the possibility of predicting the light sources in the scene by predicting many rays that are emitted from the light sources. We are able to convert between ray bundles and light source position. By adding more properties to the ray bundles, such as the color of the light, we can potentially predict the light sources in the scene, which is the next step of our research.
 
 ## Progress
 

@@ -31,6 +31,7 @@ def get_parser():
     parser.add_argument("--output_dir", type=str, default="output")
     parser.add_argument("--max_n_iteration", type=int, default=500)
     parser.add_argument("--model_dir", type=str, default=None)
+    parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--num_images", type=int, default=8)
     parser.add_argument("--max_num_images", type=int, default=8)
     parser.add_argument("--learning_rate", type=float, default=0.0001)
