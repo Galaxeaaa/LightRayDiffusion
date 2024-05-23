@@ -1,6 +1,7 @@
 import gc
 import json
 import os
+import sys
 
 import drjit as dr
 import imageio
@@ -13,7 +14,8 @@ from utils.visualization import display, visualizeRays
 mi.set_variant("cuda_ad_rgb")
 
 from dataloader.convert_xml import convertXML2Dict
-from dataloader.openrooms import OpenRoomsDemoSceneData, OpenRoomsSceneData, get_dataloader
+from dataloader.openrooms import (OpenRoomsDemoSceneData, OpenRoomsSceneData,
+                                  get_dataloader)
 from utils.PluckerRay import PluckerRay
 from utils.rays_conversion import pluckerRays2Point
 
@@ -116,6 +118,9 @@ def newSceneWithRandomLightCenter(scene_dict):
 
 
 if __name__ == "__main__":
+    scene_idx = int(sys.argv[1])
+    light_idx = int(sys.argv[2])
+
     cwd = "."
     res_h = 420
     res_w = 560
@@ -129,7 +134,7 @@ if __name__ == "__main__":
         scene_names = f.readlines()
         scene_names = [scene_name.strip() for scene_name in scene_names]
 
-    for scene_name in scene_names[9:10]:
+    for scene_name in scene_names[scene_idx:scene_idx + 1]:
         print(f"Generating data for scene {scene_name}...")
         data_dir = os.path.join(cwd, "data/scenes_on_cluster/xml", scene_name)
         xml_filename = os.path.join(data_dir, "main.xml")
@@ -169,7 +174,8 @@ if __name__ == "__main__":
 
         scene = mi.load_dict(scene_dict)
 
-        for i_light in range(num_lights_per_scene):
+        # for i_light in range(num_lights_per_scene):
+        for i_light in [light_idx]:
             params = mi.traverse(scene)
             light_RG = np.random.uniform(2, 10)
             light_B = np.random.uniform(light_RG * 0.5, light_RG * 1.1)
@@ -234,12 +240,12 @@ if __name__ == "__main__":
             output_dir = os.path.join(
                 cwd, "data", "RayDiffusionData", data_group_name, scene_name, f"light{i_light}"
             )
-            output_dir = os.path.join("test_output_2", scene_name, f"light{i_light}")
+            # output_dir = os.path.join("test_output_2", scene_name, f"light{i_light}")
             os.makedirs(output_dir, exist_ok=True)
 
             origins = []
             for i_view in range(len(dataset)):
-            # for i_view in range(10, len(dataset)):
+                # for i_view in range(10, len(dataset)):
                 # Set up camera
                 cam_lookat_mat = dataset[i_view]["camera_lookat_mat"]
                 camera_extrinsics = mi.ScalarTransform4f.look_at(
