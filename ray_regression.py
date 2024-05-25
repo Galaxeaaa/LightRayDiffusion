@@ -129,9 +129,9 @@ def train(args):
             loss = torch.nn.functional.mse_loss(eps_pred, all_rays)
             progress_bar.set_description(f"Loss: {loss.item()}")
             losses.append(loss.item())
-            if loss < 0.001:
-                n_iteration = i_iter
-                break
+            # if loss < 0.001:
+            #     n_iteration = i_iter
+            #     break
             loss.backward()
             optimizer.step()
         # progress_bar.set_description(f"lr: {scheduler.get_last_lr()}")
