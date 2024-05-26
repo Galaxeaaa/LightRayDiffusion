@@ -337,8 +337,8 @@ def validate(args):
 if __name__ == "__main__":
     parser = get_parser()
     args = parser.parse_args()
-    args.model_dir = "output/20240519_142029/model.pth"
-    args.split = "train"
+    # args.model_dir = "output/20240519_142029/model.pth"
+    # args.split = "train"
     if args.model_dir is None:
         current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
         args.output_dir = os.path.join(args.output_dir, current_time)
