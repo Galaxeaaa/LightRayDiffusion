@@ -68,6 +68,10 @@ class RayDiffusionData(Dataset):
         num_patches_y = params["num_patches_y"]
         num_images = params["num_images"]
         light_center = np.array(params["light_center"], dtype=np.float32)
+        try:
+            scale = params["scale"]
+        except KeyError:
+            raise ValueError(f"scale not found in params.json for scene {parent_dir}")
 
         image = imageio.imread(image_file)
         image = np.array(image, dtype=np.float32)
@@ -85,4 +89,4 @@ class RayDiffusionData(Dataset):
             ]
             camera_lookat_mat = np.array(camera_lookat_mat)
 
-        return image, rays, light_center, camera_lookat_mat, origin
+        return image, rays, light_center, camera_lookat_mat, origin, scale

@@ -130,7 +130,6 @@ scene0357_01
 scene0359_01
 scene0360_00
 scene0361_01
-scene0362_03
 scene0368_00
 scene0369_00
 scene0370_00

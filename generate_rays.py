@@ -185,43 +185,54 @@ if __name__ == "__main__":
             # light_B = 5
             # light_center = np.array([0.0, 0.0, 0.0])
 
-            # # Load light center from file
-            # params_dir = os.path.join(
-            #     cwd,
-            #     "data",
-            #     "RayDiffusionData",
-            #     data_group_name,
-            #     scene_name,
-            #     f"light{i_light}",
-            #     "params.json",
-            # )
-            # with open(params_dir, "r") as f:
-            #     jsonfile = json.load(f)
-            #     light_center = jsonfile["light_center"]
+            # Load light center from file
+            params_dir = os.path.join(
+                cwd,
+                "data",
+                "RayDiffusionData",
+                data_group_name,
+                scene_name,
+                f"light{i_light}",
+                "params.json",
+            )
+            with open(params_dir, "r") as f:
+                jsonfile = json.load(f)
+                light_center = jsonfile["light_center"]
+                num_patches_x = jsonfile["num_patches_x"]
+                num_patches_y = jsonfile["num_patches_y"]
+                num_images = jsonfile["num_images"]
 
-            # Try to render an image to check if the light at valid position
             camera_lookat_mat = dataset[0]["camera_lookat_mat"]
             params["sensor.to_world"] = mi.ScalarTransform4f.look_at(
                 origin=camera_lookat_mat[0], target=camera_lookat_mat[1], up=camera_lookat_mat[2]
             )
             params.update()
+            min_cam_pos = np.array([0, 0, 0])
+            max_cam_pos = np.array([0, 0, 0])
+            for i_view in range(len(dataset)):
+                cam_lookat_mat = dataset[i_view]["camera_lookat_mat"]
+                cam_pos = cam_lookat_mat[0]
+                min_cam_pos = np.minimum(min_cam_pos, cam_pos)
+                max_cam_pos = np.maximum(max_cam_pos, cam_pos)
+            
+            scale = np.max(max_cam_pos - min_cam_pos)
 
-            print(f"Trying to render an image...")
-            centers = []
-            while True:
-                light_center = [
-                    np.random.uniform(-5, 5),
-                    np.random.uniform(-2, 2),
-                    np.random.uniform(-5, 5),
-                ]
-                params["emitter_opt.position"] = light_center
-                params.update()
-                try_image = mi.render(scene, spp=35)
-                try_image = np.array(try_image, dtype=np.float32)
-                avg_color = np.mean(try_image, axis=(0, 1))
-                if np.all(avg_color > 0.01):
-                    centers.append(light_center)
-                    break
+            # print(f"Trying to render an image...")
+            # centers = []
+            # while True:
+            #     light_center = [
+            #         np.random.uniform(-5, 5),
+            #         np.random.uniform(-2, 2),
+            #         np.random.uniform(-5, 5),
+            #     ]
+            #     params["emitter_opt.position"] = light_center
+            #     params.update()
+            #     try_image = mi.render(scene, spp=35)
+            #     try_image = np.array(try_image, dtype=np.float32)
+            #     avg_color = np.mean(try_image, axis=(0, 1))
+            #     if np.all(avg_color > 0.01):
+            #         centers.append(light_center)
+            #         break
 
             # # [TEMP] find bounding box of light centers
             # centers = np.array(centers)
@@ -231,7 +242,7 @@ if __name__ == "__main__":
             # print(f"max_center: {max_center}")
             # exit(0)
 
-            print(f"Light center: {light_center}")
+            # print(f"Light center: {light_center}")
 
             # Generate gt rays for light ray diffusion
             print(f"Generating data...")
@@ -245,6 +256,7 @@ if __name__ == "__main__":
 
             origins = []
             for i_view in range(len(dataset)):
+                break
                 # for i_view in range(10, len(dataset)):
                 # Set up camera
                 cam_lookat_mat = dataset[i_view]["camera_lookat_mat"]
@@ -362,6 +374,7 @@ if __name__ == "__main__":
                 "num_patches_y": num_patches_y,
                 "num_images": len(dataset),
                 "light_center": list(light_center),
+                "scale": scale,
             }
             json_file = os.path.join(output_dir, f"params.json")
             with open(json_file, "w") as f:

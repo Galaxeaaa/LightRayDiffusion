@@ -96,7 +96,7 @@ def train(args):
     n_iteration = max_n_iteration
     losses = []
     for i_iter in progress_bar:
-        for all_images, all_rays, all_light_centers, all_cam_mats, all_origins in iter(dataloader):
+        for all_images, all_rays, all_light_centers, all_cam_mats, all_origins, all_scale in iter(dataloader):
             all_images = all_images.unsqueeze(0).permute(0, 1, 4, 2, 3).to(device)
             all_rays = all_rays.unsqueeze(0).permute(0, 1, 4, 2, 3).to(device)
 
@@ -237,10 +237,11 @@ def validate(args):
     gt_positions = []
     pred_positions = []
     position_losses = []
+    position_loss_percentages = []
     progress_bar = trange(len(val_data))
     dataloader_iter = iter(dataloader)
     for i_iter in progress_bar:
-        all_images, all_rays, all_light_centers, all_cam_mats, all_origins = next(dataloader_iter)
+        all_images, all_rays, all_light_centers, all_cam_mats, all_origins, all_scale = next(dataloader_iter)
         all_images = all_images.unsqueeze(0).permute(0, 1, 4, 2, 3).to(device)
         all_rays = all_rays.unsqueeze(0).permute(0, 1, 4, 2, 3).to(device)
 
@@ -320,21 +321,24 @@ def validate(args):
         pred_positions.append(pred_light_pos)
 
         position_losses.append(position_loss)
+        position_loss_percentages.append(position_loss / all_scale[0])
 
     with open(os.path.join(output_dir, f"position_losses_{split}.txt"), "w") as f:
         f.write(f"Average position loss: {np.mean(position_losses)}\n")
+        f.write(f"Average position loss percentage: {np.mean(position_loss_percentages)}\n")
         for i in range(len(position_losses)):
             f.write(f"{i}\n")
             f.write(f"gt:\t{gt_positions[i]}\n")
             f.write(f"pred:\t{pred_positions[i]}\n")
             f.write(f"{position_losses[i]}\n")
+            f.write(f"{position_loss_percentages[i]}\n")
 
 
 if __name__ == "__main__":
     parser = get_parser()
     args = parser.parse_args()
-    # args.model_dir = "output/20240519_142029/model.pth"
-    # args.split = "train"
+    args.model_dir = "output/20240519_142029/model.pth"
+    args.split = "train"
     if args.model_dir is None:
         current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
         args.output_dir = os.path.join(args.output_dir, current_time)
