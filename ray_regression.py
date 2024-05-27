@@ -97,8 +97,8 @@ def train(args):
     losses = []
     for i_iter in progress_bar:
         for all_images, all_rays, all_light_centers, all_cam_mats, all_origins, all_scale in iter(dataloader):
-            all_images = all_images.unsqueeze(0).permute(0, 1, 4, 2, 3).to(device)
-            all_rays = all_rays.unsqueeze(0).permute(0, 1, 4, 2, 3).to(device)
+            all_images = all_images.unsqueeze(1).permute(0, 1, 4, 2, 3).to(device)
+            all_rays = all_rays.unsqueeze(1).permute(0, 1, 4, 2, 3).to(device)
 
             batch_size = all_images.shape[0]
             num_images = all_images.shape[1]
@@ -109,7 +109,7 @@ def train(args):
                 uv.permute(2, 0, 1)
                 .unsqueeze(0)
                 .unsqueeze(0)
-                .expand(1, num_images, 2, num_patches_y, num_patches_x)
+                .expand(batch_size, num_images, 2, num_patches_y, num_patches_x)
             )
             x_t = torch.randn(
                 batch_size, num_images, 6, num_patches_y, num_patches_x, device=device
@@ -129,9 +129,9 @@ def train(args):
             loss = torch.nn.functional.mse_loss(eps_pred, all_rays)
             progress_bar.set_description(f"Loss: {loss.item()}")
             losses.append(loss.item())
-            # if loss < 0.001:
-            #     n_iteration = i_iter
-            #     break
+            if loss < 0.001:
+                n_iteration = i_iter
+                break
             loss.backward()
             optimizer.step()
         # progress_bar.set_description(f"lr: {scheduler.get_last_lr()}")
