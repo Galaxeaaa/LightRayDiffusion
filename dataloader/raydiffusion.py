@@ -10,13 +10,14 @@ from generate_rays import readRaysFromFile
 
 
 class RayDiffusionData(Dataset):
-    def __init__(self, data_dir: str, split: str = "all"):
+    def __init__(self, data_dir: str, split: str = "all", num_scenes: int = None):
         self.data_dir = data_dir
         self.image_file_list = []
         num_patches_x, num_patches_y = 0, 0
         scene_dirs = glob(os.path.join(data_dir, "scene*"))
         scene_dirs = sorted(scene_dirs)
-        # scene_dirs = scene_dirs[:1]
+        if num_scenes is not None:
+            scene_dirs = scene_dirs[:num_scenes]
         for scene_dir in scene_dirs:
             light_dirs = glob(os.path.join(scene_dir, "light*"))
             light_dirs = sorted(light_dirs)

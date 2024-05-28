@@ -28,6 +28,7 @@ def get_parser():
     parser.add_argument("--data_dir", type=str, default="data/RayDiffusionData/scenes_on_cluster")
     # parser.add_argument("--data_dir", type=str, default="test_output")
     parser.add_argument("--split", type=str, default="val")
+    parser.add_argument("--num_scenes", type=int, default=30)
     parser.add_argument("--output_dir", type=str, default="output")
     parser.add_argument("--max_n_iteration", type=int, default=500)
     parser.add_argument("--model_dir", type=str, default=None)
@@ -63,7 +64,7 @@ def train(args):
     lr_scheduler_gamma = args.lr_scheduler_gamma
 
     # load data
-    train_data = RayDiffusionData(data_dir, split="train")
+    train_data = RayDiffusionData(data_dir, split="train", num_scenes=30)
     dataloader = DataLoader(train_data, batch_size=num_images, shuffle=True)
     num_patches_x = train_data.num_patches_x
     num_patches_y = train_data.num_patches_y
