@@ -28,7 +28,7 @@ def get_parser():
     parser.add_argument("--data_dir", type=str, default="data/RayDiffusionData/scenes_on_cluster")
     # parser.add_argument("--data_dir", type=str, default="test_output")
     parser.add_argument("--split", type=str, default="val")
-    parser.add_argument("--num_scenes", type=int, default=None)
+    parser.add_argument("--num_scenes", type=int, default=30)
     parser.add_argument("--output_dir", type=str, default="output")
     parser.add_argument("--max_n_iteration", type=int, default=500)
     parser.add_argument("--model_dir", type=str, default=None)
@@ -327,7 +327,6 @@ def validate(args):
     with open(os.path.join(output_dir, f"position_losses_{split}.txt"), "w") as f:
         f.write(f"Average position loss: {np.mean(position_losses)}\n")
         f.write(f"Average position loss percentage: {np.mean(position_loss_percentages)}\n")
-        f.write(f"Medium position loss percentage: {np.median(position_loss_percentages)}\n")
         for i in range(len(position_losses)):
             f.write(f"{i}\n")
             f.write(f"gt:\t{gt_positions[i]}\n")
