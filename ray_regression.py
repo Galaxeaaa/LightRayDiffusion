@@ -186,9 +186,10 @@ def train(args):
             # Evaluate model every eval_interval iterations
 
         if i != 0 and i % args.eval_interval == 0:
-            validate(args, model=model)
+            val_results = validate(args, model=model, write_details=False)
+            wandb.log(val_results, step=i)
 
-        wandb.log({"train_loss": np.mean(losses)})
+        wandb.log({"train_loss": np.mean(losses)}, step=i)
         scheduler.step()
 
     os.makedirs(args.output_dir, exist_ok=True)
@@ -235,7 +236,7 @@ def train(args):
     # json.dump(config, open(config_file, "w"), indent=4, sort_keys=True)
 
 
-def validate(args, model=None):
+def validate(args, model=None, write_details=True):
     # Load data
     num_images = 1
     val_data = RayDiffusionData(
@@ -320,26 +321,27 @@ def validate(args, model=None):
             ndc_coordinates=uv,
         )
 
-        # visualize rays
-        pred_rays_vis = visualizeRays(
-            eps_pred.cpu()
-            .detach()
-            .numpy()
-            .reshape(-1, 6, num_patches_y, num_patches_x)
-            .transpose(0, 2, 3, 1)
-            .squeeze()
-        )  # (B=1, 6, H * W) -> (H, W, 6)
-        gt_rays_vis = visualizeRays(
-            all_rays.cpu()
-            .numpy()
-            .reshape(-1, 6, num_patches_y, num_patches_x)
-            .transpose(0, 2, 3, 1)
-            .squeeze()
-        )  # (B=1, 6, H * W) -> (H, W, 6)
-        rays_vis = np.concatenate([pred_rays_vis, gt_rays_vis], axis=-3)
-        visualization_dir = os.path.join(args.output_dir, f"visualization_{args.split}")
-        os.makedirs(visualization_dir, exist_ok=True)
-        imageio.imwrite(os.path.join(visualization_dir, f"vis{i}.png"), rays_vis)
+        if write_details:
+            # visualize rays
+            pred_rays_vis = visualizeRays(
+                eps_pred.cpu()
+                .detach()
+                .numpy()
+                .reshape(-1, 6, num_patches_y, num_patches_x)
+                .transpose(0, 2, 3, 1)
+                .squeeze()
+            )  # (B=1, 6, H * W) -> (H, W, 6)
+            gt_rays_vis = visualizeRays(
+                all_rays.cpu()
+                .numpy()
+                .reshape(-1, 6, num_patches_y, num_patches_x)
+                .transpose(0, 2, 3, 1)
+                .squeeze()
+            )  # (B=1, 6, H * W) -> (H, W, 6)
+            rays_vis = np.concatenate([pred_rays_vis, gt_rays_vis], axis=-3)
+            visualization_dir = os.path.join(args.output_dir, f"visualization_{args.split}")
+            os.makedirs(visualization_dir, exist_ok=True)
+            imageio.imwrite(os.path.join(visualization_dir, f"vis{i}.png"), rays_vis)
 
         gt_light_pos = all_light_centers.cpu().numpy()
         pred_rays = (
@@ -361,19 +363,23 @@ def validate(args, model=None):
         position_losses.append(position_loss)
         position_loss_percentages.append(position_loss / all_scale[0])
 
-    wandb.log({"val_mean_position_loss": np.mean(position_losses)})
-    wandb.log({"val_mean_position_loss_percentage": np.mean(position_loss_percentages)})
+    if write_details:
+        with open(os.path.join(args.output_dir, f"position_losses_{args.split}.txt"), "w") as f:
+            f.write(f"Average position loss: {np.mean(position_losses)}\n")
+            f.write(f"Average position loss percentage: {np.mean(position_loss_percentages)}\n")
+            f.write(f"Medium position loss percentage: {np.median(position_loss_percentages)}\n")
+            for i in range(len(position_losses)):
+                f.write(f"{i}\n")
+                f.write(f"gt:\t{gt_positions[i]}\n")
+                f.write(f"pred:\t{pred_positions[i]}\n")
+                f.write(f"{position_losses[i]}\n")
+                f.write(f"{position_loss_percentages[i]}\n")
 
-    with open(os.path.join(args.output_dir, f"position_losses_{args.split}.txt"), "w") as f:
-        f.write(f"Average position loss: {np.mean(position_losses)}\n")
-        f.write(f"Average position loss percentage: {np.mean(position_loss_percentages)}\n")
-        f.write(f"Medium position loss percentage: {np.median(position_loss_percentages)}\n")
-        for i in range(len(position_losses)):
-            f.write(f"{i}\n")
-            f.write(f"gt:\t{gt_positions[i]}\n")
-            f.write(f"pred:\t{pred_positions[i]}\n")
-            f.write(f"{position_losses[i]}\n")
-            f.write(f"{position_loss_percentages[i]}\n")
+    return {
+        "val_mean_position_loss": np.mean(position_losses),
+        "val_mean_position_loss_percentage": np.mean(position_loss_percentages),
+        "Medium position loss percentage": np.median(position_loss_percentages),
+    }
 
 
 if __name__ == "__main__":
