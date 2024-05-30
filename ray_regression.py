@@ -1,3 +1,4 @@
+import wandb
 import argparse
 import glob
 import json
@@ -23,25 +24,26 @@ from utils.rays_conversion import pluckerRays2Point
 from utils.visualization import visualizeRays
 
 
-def get_parser():
+def getParser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_dir", type=str, default="data/RayDiffusionData/scenes_on_cluster")
     # parser.add_argument("--data_dir", type=str, default="test_output")
-    parser.add_argument("--split", type=str, default="val")
+    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--data_dir", type=str, default="data/RayDiffusionData/scenes_on_cluster")
+    parser.add_argument("--learning_rate", type=float, default=0.0001)
+    parser.add_argument("--lr_scheduler_gamma", type=float, default=0.99)
+    parser.add_argument("--lr_scheduler", type=str, default="ExponentialLR")
+    parser.add_argument("--max_n_epochs", type=int, default=500)
+    parser.add_argument("--max_num_images", type=int, default=8)
+    parser.add_argument("--model_dir", type=str, default=None)
+    parser.add_argument("--num_images", type=int, default=8)
     parser.add_argument("--num_scenes", type=int, default=None)
     parser.add_argument("--output_dir", type=str, default="output")
-    parser.add_argument("--max_n_iteration", type=int, default=500)
-    parser.add_argument("--model_dir", type=str, default=None)
-    parser.add_argument("--batch_size", type=int, default=1)
-    parser.add_argument("--num_images", type=int, default=8)
-    parser.add_argument("--max_num_images", type=int, default=8)
-    parser.add_argument("--learning_rate", type=float, default=0.0001)
-    parser.add_argument("--lr_scheduler", type=str, default="ExponentialLR")
-    parser.add_argument("--lr_scheduler_gamma", type=float, default=0.99)
+    parser.add_argument("--split", type=str, default="val")
+    parser.add_argument("--eval_interval", type=int, default=50)
     return parser
 
 
-def compute_image_uv(num_patches_x, num_patches_y):
+def computeImageUV(num_patches_x, num_patches_y):
     """
     Compute the UV coordinates of the origins of the rays in the image space.  Bottom-left corner of the image is (-1, -1) and top-right corner is (1, 1)
     """
@@ -52,22 +54,38 @@ def compute_image_uv(num_patches_x, num_patches_y):
     x, y = torch.meshgrid(x, y, indexing="ij")
     return torch.stack([x, y], dim=-1)
 
+    
+def transformToWorldSpace(p, cam_mat, origin):
+    pass
+
 
 def train(args):
+    B = args.batch_size
     data_dir = args.data_dir
-    output_dir = args.output_dir
-    max_n_iteration = args.max_n_iteration
-    max_num_images = args.max_num_images
-    num_images = args.num_images
     learning_rate = args.learning_rate
     lr_scheduler = args.lr_scheduler
     lr_scheduler_gamma = args.lr_scheduler_gamma
+    max_n_epochs = args.max_n_epochs
+    max_num_images = args.max_num_images
+    # model_dir = args.model_dir
+    N = args.num_images
+    output_dir = args.output_dir
+    # split = args.split
+    eval_interval = args.eval_interval
+
+    wandb.init(project="RayDiffusion", config=vars(args))
 
     # load data
     train_data = RayDiffusionData(data_dir, split="train", num_scenes=30)
-    dataloader = DataLoader(train_data, batch_size=num_images, shuffle=True)
+    dataloader = DataLoader(train_data, batch_size=B, shuffle=True)
     num_patches_x = train_data.num_patches_x
     num_patches_y = train_data.num_patches_y
+
+    # detect if cuda is available
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+    else:
+        raise ValueError("CUDA is not available")
 
     device = torch.device("cuda:0")
 
@@ -93,29 +111,40 @@ def train(args):
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     scheduler = eval(lr_scheduler)(optimizer, gamma=lr_scheduler_gamma)
 
-    progress_bar = trange(max_n_iteration)
-    n_iteration = max_n_iteration
+    progress_bar = trange(max_n_epochs)
+    epoch = max_n_epochs
     losses = []
-    for i_iter in progress_bar:
-        for all_images, all_rays, all_light_centers, all_cam_mats, all_origins, all_scale in iter(dataloader):
-            all_images = all_images.unsqueeze(1).permute(0, 1, 4, 2, 3).to(device)
-            all_rays = all_rays.unsqueeze(1).permute(0, 1, 4, 2, 3).to(device)
-
-            batch_size = all_images.shape[0]
-            num_images = all_images.shape[1]
-            # (H, W, 2)
-            uv = compute_image_uv(num_patches_x=num_patches_x, num_patches_y=num_patches_y).to(device)
-            # (B, N, 2, H, W)
+    for i in progress_bar:
+        for (
+            all_images,
+            all_rays,
+            all_light_centers,
+            all_cam_mats,
+            all_origins,
+            all_scale,
+        ) in dataloader:
+            all_images = (
+                all_images.unsqueeze(1).permute(0, 1, 4, 2, 3).to(device)
+            )  # (B, H, W, 3) -> (B, N, 3, H, W)
+            all_rays = (
+                all_rays.unsqueeze(1).permute(0, 1, 4, 2, 3).to(device)
+            )  # (B, H, W, 6) -> (B, N, 6, H, W)
+            B = all_images.shape[0]
+            N = all_images.shape[1]
             uv = (
-                uv.permute(2, 0, 1)
+                computeImageUV(num_patches_x=num_patches_x, num_patches_y=num_patches_y)
+                .permute(2, 0, 1)
                 .unsqueeze(0)
                 .unsqueeze(0)
-                .expand(batch_size, num_images, 2, num_patches_y, num_patches_x)
-            )
+                .expand(B, N, 2, num_patches_y, num_patches_x)
+                .to(device)
+            )  # (H, W, 2) -> (B, N, 2, H, W)
             x_t = torch.randn(
-                batch_size, num_images, 6, num_patches_y, num_patches_x, device=device
-            )
-            image_features = model.feature_extractor(all_images, autoresize=True)
+                B, N, 6, num_patches_y, num_patches_x, device=device
+            )  # (B, N, 6, H, W)
+            image_features = model.feature_extractor(
+                all_images, autoresize=True
+            )  # (B, N, C_feat, H, W)
             mask = all_rays[..., :3] != 0
 
             optimizer.zero_grad()
@@ -126,16 +155,30 @@ def train(args):
                 ndc_coordinates=uv,
                 mask=mask,
             )
+            # eps_pred: (B, N, 6, H, W)
 
             loss = torch.nn.functional.mse_loss(eps_pred, all_rays)
             progress_bar.set_description(f"Loss: {loss.item()}")
-            losses.append(loss.item())
-            if loss < 0.001:
-                n_iteration = i_iter
-                break
+            wandb.log({"loss": loss.item()})
             loss.backward()
             optimizer.step()
-        # progress_bar.set_description(f"lr: {scheduler.get_last_lr()}")
+
+            # Evaluate model every eval_interval iterations
+            
+            if i % eval_interval == 0:
+                gt_light_pos = all_light_centers.cpu().numpy() # (B, 3)
+                pred_rays = (
+                    eps_pred.cpu()
+                    .detach()
+                    .numpy()
+                    .reshape(-1, 6, num_patches_y * num_patches_x)
+                    .transpose(0, 2, 1)
+                    .squeeze()
+                )
+                pred_light_pos = pluckerRays2Point(pred_rays)
+                pred_light_pos = transformToWorldSpace(pred_light_pos, all_cam_mats[0][0], all_origins[0])
+
+                
         scheduler.step()
 
     os.makedirs(output_dir, exist_ok=True)
@@ -173,8 +216,8 @@ def train(args):
         "lr_scheduler_gamma": lr_scheduler_gamma,
         "data_dir": data_dir,
         "n_loaded_images": len(train_data),
-        "n_iteration": n_iteration,
-        "max_n_iteration": max_n_iteration,
+        "n_iteration": epoch,
+        "max_n_epochs": max_n_epochs,
         "num_patches_x": num_patches_x,
         "num_patches_y": num_patches_y,
         "model": {
@@ -225,7 +268,7 @@ def validate(args):
 
     t = model.noise_scheduler.max_timesteps
     # (H, W, 2)
-    uv = compute_image_uv(num_patches_x=num_patches_x, num_patches_y=num_patches_y).to(device)
+    uv = computeImageUV(num_patches_x=num_patches_x, num_patches_y=num_patches_y).to(device)
     # (B, N, 2, H, W)
     uv = (
         uv.permute(2, 0, 1)
@@ -242,14 +285,20 @@ def validate(args):
     progress_bar = trange(len(val_data))
     dataloader_iter = iter(dataloader)
     for i_iter in progress_bar:
-        all_images, all_rays, all_light_centers, all_cam_mats, all_origins, all_scale = next(dataloader_iter)
+        all_images, all_rays, all_light_centers, all_cam_mats, all_origins, all_scale = next(
+            dataloader_iter
+        )
         all_images = all_images.unsqueeze(0).permute(0, 1, 4, 2, 3).to(device)
         all_rays = all_rays.unsqueeze(0).permute(0, 1, 4, 2, 3).to(device)
 
         batch_size = all_images.shape[0]
         # num_images = all_images.shape[1]
-        x_t = torch.randn(batch_size, num_images, 6, num_patches_y, num_patches_x, device=device)
-        image_features = model.feature_extractor(all_images, autoresize=True)
+        x_t = torch.randn(
+            batch_size, num_images, 6, num_patches_y, num_patches_x, device=device
+        )  # (B, N, 6, H, W)
+        image_features = model.feature_extractor(
+            all_images, autoresize=True
+        )  # (B, N, C_feat, H, W)
 
         eps_pred, noise_sample = model(
             features=image_features,
@@ -337,7 +386,7 @@ def validate(args):
 
 
 if __name__ == "__main__":
-    parser = get_parser()
+    parser = getParser()
     args = parser.parse_args()
     # args.model_dir = "output/20240519_142029/model.pth"
     # args.split = "train"

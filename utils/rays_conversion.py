@@ -1,5 +1,6 @@
 import torch
 
+
 def intersect_skew_lines_high_dim(p, r, mask=None):
     # Implements https://en.wikipedia.org/wiki/Skew_lines In more than two dimensions
     dim = p.shape[-1]
@@ -26,7 +27,19 @@ def intersect_skew_lines_high_dim(p, r, mask=None):
         return None, None
     return p_intersect, r
 
+
 def pluckerRays2Point(plucker_rays):
+    """
+    Convert plucker rays to point using least square method.
+
+    Parameters
+    ----------
+        plucker_rays (Tensor): (..., 6)
+
+    Returns
+    -------
+        p_intersect (Tensor): (3)
+    """
     rays = torch.tensor(plucker_rays)
     mask = torch.linalg.norm(rays, dim=-1) > 1e-5
     d = rays[..., :3]
@@ -36,12 +49,16 @@ def pluckerRays2Point(plucker_rays):
 
     return p_intersect
 
+
 if __name__ == "__main__":
-    rays = torch.tensor([
-        [1, 0, 0, 0, 1, 0],
-        [0, 1, 0, 0, 0, 1],
-        [1, 1, 0, 0, 0, 1],
-        [1, 1, 1, 0, 0, 1],
-    ], dtype=torch.float32)
+    rays = torch.tensor(
+        [
+            [1, 0, 0, 0, 1, 0],
+            [0, 1, 0, 0, 0, 1],
+            [1, 1, 0, 0, 0, 1],
+            [1, 1, 1, 0, 0, 1],
+        ],
+        dtype=torch.float32,
+    )
     rays = rays.unsqueeze(0).repeat(3, 1, 1)
     print(pluckerRays2Point(rays))
