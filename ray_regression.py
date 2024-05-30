@@ -1,15 +1,15 @@
 import wandb
-import argparse
+import configargparse
 import glob
 import json
 import os
 from datetime import datetime
+from utils.matrix import lookat_matrix, invert_camera_matrix
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 import imageio
 
 # from inference.predict import predict_cameras
-import mitsuba as mi
 import numpy as np
 import torch
 from torch.optim.lr_scheduler import ExponentialLR
@@ -25,20 +25,30 @@ from utils.visualization import visualizeRays
 
 
 def getParser():
-    parser = argparse.ArgumentParser()
-    # parser.add_argument("--data_dir", type=str, default="test_output")
+    def none_or_str(value):
+        if value == "None":
+            return None
+        return str(value)
+
+    parser = configargparse.ArgumentParser()
+    parser.add_argument("--config", "-c", is_config_file=True, help="config file path")
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--data_dir", type=str, default="data/RayDiffusionData/scenes_on_cluster")
+    parser.add_argument(
+        "--data_dir", type=none_or_str, default="data/RayDiffusionData/scenes_on_cluster"
+    )
+    # parser.add_argument("--data_dir", type=none_or_str, default="test_output")
     parser.add_argument("--learning_rate", type=float, default=0.0001)
     parser.add_argument("--lr_scheduler_gamma", type=float, default=0.99)
-    parser.add_argument("--lr_scheduler", type=str, default="ExponentialLR")
+    parser.add_argument("--lr_scheduler", type=none_or_str, default="ExponentialLR")
     parser.add_argument("--max_n_epochs", type=int, default=500)
     parser.add_argument("--max_num_images", type=int, default=8)
-    parser.add_argument("--model_dir", type=str, default=None)
+    parser.add_argument("--model_dir", type=none_or_str, default=None)
     parser.add_argument("--num_images", type=int, default=8)
     parser.add_argument("--num_scenes", type=int, default=None)
-    parser.add_argument("--output_dir", type=str, default="output")
-    parser.add_argument("--split", type=str, default="val")
+    parser.add_argument("--num_lights", type=int, default=None)
+    parser.add_argument("--output_dir", type=none_or_str, default="output")
+    parser.add_argument("--split", type=none_or_str, default="val")
+    parser.add_argument("--split_by", type=none_or_str, default="image")
     parser.add_argument("--eval_interval", type=int, default=50)
     return parser
 
@@ -54,30 +64,45 @@ def computeImageUV(num_patches_x, num_patches_y):
     x, y = torch.meshgrid(x, y, indexing="ij")
     return torch.stack([x, y], dim=-1)
 
-    
+
 def transformToWorldSpace(p, cam_mat, origin):
-    pass
+    """
+    Args
+    ----
+    p:
+        3D point in camera space
+    cam_mat: (4, 4)
+        Camera matrix
+    origin:
+        Origin of the camera
+    """
+    p = np.array(p)
+    cam_mat = np.array(cam_mat)
+    origin = np.array(origin)
+
+    cam_pos = cam_mat[0]
+    camera_extrinsics = lookat_matrix(
+        cam_mat[0], cam_mat[1], cam_mat[2]
+    )  # from camera space to world space
+    p = np.array(p)
+    p = np.concatenate([p, np.ones((p.shape[0], 1))], axis=-1).transpose()
+    p = camera_extrinsics @ p
+    p = p[:3].transpose()
+    p = p - cam_pos + origin
+    # (N, 3)
+
+    return p
 
 
 def train(args):
-    B = args.batch_size
-    data_dir = args.data_dir
-    learning_rate = args.learning_rate
-    lr_scheduler = args.lr_scheduler
-    lr_scheduler_gamma = args.lr_scheduler_gamma
-    max_n_epochs = args.max_n_epochs
-    max_num_images = args.max_num_images
-    # model_dir = args.model_dir
-    N = args.num_images
-    output_dir = args.output_dir
-    # split = args.split
-    eval_interval = args.eval_interval
-
     wandb.init(project="RayDiffusion", config=vars(args))
+    wandb.config = vars(args)
 
     # load data
-    train_data = RayDiffusionData(data_dir, split="train", num_scenes=30)
-    dataloader = DataLoader(train_data, batch_size=B, shuffle=True)
+    train_data = RayDiffusionData(
+        args.data_dir, split="train", split_by=args.split_by, num_scenes=args.num_scenes, num_lights=args.num_lights
+    )
+    dataloader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
     num_patches_x = train_data.num_patches_x
     num_patches_y = train_data.num_patches_y
 
@@ -100,7 +125,7 @@ def train(args):
         depth=num_patches_x,
         width=num_patches_y,
         P=1,
-        max_num_images=max_num_images,
+        max_num_images=args.max_num_images,
         noise_scheduler=noise_scheduler,
         feature_extractor="dino",
         append_ndc=True,
@@ -108,21 +133,16 @@ def train(args):
 
     t = model.noise_scheduler.max_timesteps
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    scheduler = eval(lr_scheduler)(optimizer, gamma=lr_scheduler_gamma)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+    scheduler = eval(args.lr_scheduler)(optimizer, gamma=args.lr_scheduler_gamma)
 
-    progress_bar = trange(max_n_epochs)
-    epoch = max_n_epochs
+    progress_bar = trange(args.max_n_epochs)
+    epoch = args.max_n_epochs
     losses = []
     for i in progress_bar:
-        for (
-            all_images,
-            all_rays,
-            all_light_centers,
-            all_cam_mats,
-            all_origins,
-            all_scale,
-        ) in dataloader:
+        # for ( all_images, all_rays, all_light_centers, all_cam_mats, all_origins, all_scale,) in dataloader:
+        losses = []
+        for all_images, all_rays, _, _, _, _ in dataloader:
             all_images = (
                 all_images.unsqueeze(1).permute(0, 1, 4, 2, 3).to(device)
             )  # (B, H, W, 3) -> (B, N, 3, H, W)
@@ -159,36 +179,23 @@ def train(args):
 
             loss = torch.nn.functional.mse_loss(eps_pred, all_rays)
             progress_bar.set_description(f"Loss: {loss.item()}")
-            wandb.log({"loss": loss.item()})
+            losses.append(loss.item())
             loss.backward()
             optimizer.step()
 
             # Evaluate model every eval_interval iterations
-            
-            if i % eval_interval == 0:
-                gt_light_pos = all_light_centers.cpu().numpy() # (B, 3)
-                pred_rays = (
-                    eps_pred.cpu()
-                    .detach()
-                    .numpy()
-                    .reshape(-1, 6, num_patches_y * num_patches_x)
-                    .transpose(0, 2, 1)
-                    .squeeze()
-                )
-                pred_light_pos = pluckerRays2Point(pred_rays)
-                pred_light_pos = transformToWorldSpace(pred_light_pos, all_cam_mats[0][0], all_origins[0])
 
-                
+        if i != 0 and i % args.eval_interval == 0:
+            validate(args, model=model)
+
+        wandb.log({"train_loss": np.mean(losses)})
         scheduler.step()
 
-    os.makedirs(output_dir, exist_ok=True)
-    torch.save(model.state_dict(), os.path.join(output_dir, "model.pth"))
-    print(f"Model saved to {os.path.join(output_dir, 'model.pth')}")
+    os.makedirs(args.output_dir, exist_ok=True)
+    torch.save(model.state_dict(), os.path.join(args.output_dir, "model.pth"))
+    print(f"Model saved to {os.path.join(args.output_dir, 'model.pth')}")
 
-    # plot losses in logaritmic scale
-    import matplotlib.pyplot as plt
-
-    with open(os.path.join(output_dir, "losses.txt"), "w") as f:
+    with open(os.path.join(args.output_dir, "losses.txt"), "w") as f:
         for loss in losses:
             f.write(f"{loss}\n")
 
@@ -196,12 +203,13 @@ def train(args):
     losses = losses[losses > 0]
     losses = np.log(losses)
 
-    plt.plot(losses)
-    plt.xlabel("Iteration")
-    plt.ylabel("Log Loss")
-    plt.savefig(os.path.join(output_dir, "loss.png"))
-    plt.close()
+    # plt.plot(losses)
+    # plt.xlabel("Iteration")
+    # plt.ylabel("Log Loss")
+    # plt.savefig(os.path.join(output_dir, "loss.png"))
+    # plt.close()
 
+    # # Visualize rays
     # pred_rays_vis = visualizeRays(eps_pred.cpu().detach().numpy().reshape(-1, 6, num_patches_y, num_patches_x).transpose(0, 2, 3, 1))
     # gt_rays_vis = visualizeRays(all_rays.cpu().numpy().reshape(-1, 6, num_patches_y, num_patches_x).transpose(0, 2, 3, 1))
     # rays_vis = np.concatenate([pred_rays_vis, gt_rays_vis], axis=1)
@@ -209,62 +217,63 @@ def train(args):
     # for i in range(rays_vis.shape[0]):
     #     imageio.imwrite(os.path.join(output_dir, "visualization", f"vis{i}.png"), rays_vis[i])
 
-    config_file = os.path.join(output_dir, "config.json")
-    config = {
-        "learning_rate": learning_rate,
-        "lr_scheduler": lr_scheduler,
-        "lr_scheduler_gamma": lr_scheduler_gamma,
-        "data_dir": data_dir,
-        "n_loaded_images": len(train_data),
-        "n_iteration": epoch,
-        "max_n_epochs": max_n_epochs,
-        "num_patches_x": num_patches_x,
-        "num_patches_y": num_patches_y,
-        "model": {
-            "max_num_images": max_num_images,
-        },
-    }
-    json.dump(config, open(config_file, "w"), indent=4, sort_keys=True)
+    # config_file = os.path.join(output_dir, "config.json")
+    # config = {
+    #     "learning_rate": learning_rate,
+    #     "lr_scheduler": lr_scheduler,
+    #     "lr_scheduler_gamma": lr_scheduler_gamma,
+    #     "data_dir": data_dir,
+    #     "n_loaded_images": len(train_data),
+    #     "n_iteration": epoch,
+    #     "max_n_epochs": max_n_epochs,
+    #     "num_patches_x": num_patches_x,
+    #     "num_patches_y": num_patches_y,
+    #     "model": {
+    #         "max_num_images": max_num_images,
+    #     },
+    # }
+    # json.dump(config, open(config_file, "w"), indent=4, sort_keys=True)
 
 
-def validate(args):
-    data_dir = args.data_dir
-    output_dir = args.output_dir
-    model_dir = args.model_dir
-    split = args.split
-    with open(os.path.join(os.path.dirname(model_dir), "config.json"), "r") as f:
-        config = json.load(f)
-        num_patches_x = config["num_patches_x"]
-        num_patches_y = config["num_patches_y"]
-        max_num_images = config["model"]["max_num_images"]
+def validate(args, model=None):
+    # Load data
     num_images = 1
-
-    # load data
-    val_data = RayDiffusionData(data_dir, split=split)
+    val_data = RayDiffusionData(
+        args.data_dir, split=args.split, split_by=args.split_by, num_scenes=args.num_scenes, num_lights=args.num_lights
+    )
     dataloader = DataLoader(val_data, batch_size=num_images, shuffle=False)
     num_patches_x = val_data.num_patches_x
     num_patches_y = val_data.num_patches_y
 
     device = torch.device("cuda:0")
 
-    noise_scheduler = NoiseScheduler(
-        type="linear",
-        max_timesteps=100,
-        beta_start=0.0001,
-        beta_end=0.2,
-    )
+    if model == None:
+        with open(os.path.join(os.path.dirname(args.model_dir), "config.json"), "r") as f:
+            config = json.load(f)
+            num_patches_x = config["num_patches_x"]
+            num_patches_y = config["num_patches_y"]
+            max_num_images = config["model"]["max_num_images"]
 
-    model = RayDiffuser(
-        depth=num_patches_x,
-        width=num_patches_y,
-        P=1,
-        max_num_images=max_num_images,
-        noise_scheduler=noise_scheduler,
-        feature_extractor="dino",
-        append_ndc=True,
-    ).to(device)
+        noise_scheduler = NoiseScheduler(
+            type="linear",
+            max_timesteps=100,
+            beta_start=0.0001,
+            beta_end=0.2,
+        )
 
-    model.load_state_dict(torch.load(model_dir))
+        model = RayDiffuser(
+            depth=num_patches_x,
+            width=num_patches_y,
+            P=1,
+            max_num_images=max_num_images,
+            noise_scheduler=noise_scheduler,
+            feature_extractor="dino",
+            append_ndc=True,
+        ).to(device)
+
+        model.load_state_dict(torch.load(args.model_dir))
+    else:
+        model = model.to(device)
 
     t = model.noise_scheduler.max_timesteps
     # (H, W, 2)
@@ -282,12 +291,16 @@ def validate(args):
     pred_positions = []
     position_losses = []
     position_loss_percentages = []
-    progress_bar = trange(len(val_data))
-    dataloader_iter = iter(dataloader)
-    for i_iter in progress_bar:
-        all_images, all_rays, all_light_centers, all_cam_mats, all_origins, all_scale = next(
-            dataloader_iter
-        )
+    progress_bar = tqdm(enumerate(dataloader))
+
+    for i, (
+        all_images,
+        all_rays,
+        all_light_centers,
+        all_cam_mats,
+        all_origins,
+        all_scale,
+    ) in progress_bar:
         all_images = all_images.unsqueeze(0).permute(0, 1, 4, 2, 3).to(device)
         all_rays = all_rays.unsqueeze(0).permute(0, 1, 4, 2, 3).to(device)
 
@@ -324,9 +337,9 @@ def validate(args):
             .squeeze()
         )  # (B=1, 6, H * W) -> (H, W, 6)
         rays_vis = np.concatenate([pred_rays_vis, gt_rays_vis], axis=-3)
-        visualization_dir = os.path.join(output_dir, f"visualization_{split}")
+        visualization_dir = os.path.join(args.output_dir, f"visualization_{args.split}")
         os.makedirs(visualization_dir, exist_ok=True)
-        imageio.imwrite(os.path.join(visualization_dir, f"vis{i_iter}.png"), rays_vis)
+        imageio.imwrite(os.path.join(visualization_dir, f"vis{i}.png"), rays_vis)
 
         gt_light_pos = all_light_centers.cpu().numpy()
         pred_rays = (
@@ -338,32 +351,7 @@ def validate(args):
             .squeeze()
         )  # (B=1, H * W, 6) -> (H * W, 6)
         pred_light_pos = pluckerRays2Point(pred_rays)
-        cam_pos = all_cam_mats[0][0].cpu().numpy().astype(np.float32)
-        origin = all_origins[0].cpu().numpy().astype(np.float32)
-        camera_extrinsics = mi.ScalarTransform4f.look_at(
-            origin=all_cam_mats[0][0].tolist(),
-            target=all_cam_mats[0][1].tolist(),
-            up=all_cam_mats[0][2].tolist(),
-        )
-        # # [DEBUG] compute gt light position from rays and convert to world space
-        # gt_rays = (
-        #     all_rays.cpu()
-        #     .numpy()
-        #     .reshape(-1, 6, num_patches_y * num_patches_x)
-        #     .transpose(0, 2, 1)
-        #     .squeeze()
-        # )
-        # computed_gt_light_pos = pluckerRays2Point(gt_rays)
-        # computed_gt_light_pos = camera_extrinsics @ np.array(computed_gt_light_pos)
-        # computed_gt_light_pos = np.array(
-        #     [computed_gt_light_pos[0], computed_gt_light_pos[1], computed_gt_light_pos[2]],
-        #     dtype=np.float32,
-        # )
-        # computed_gt_light_pos = computed_gt_light_pos - cam_pos + origin
-        # convert pred light position to world space
-        pred_light_pos = camera_extrinsics @ np.array(pred_light_pos)
-        pred_light_pos = np.array([pred_light_pos[0], pred_light_pos[1], pred_light_pos[2]])
-        pred_light_pos = pred_light_pos - cam_pos + origin
+        pred_light_pos = transformToWorldSpace(pred_light_pos, all_cam_mats[0], all_origins[0])
 
         # compute position loss
         position_loss = np.linalg.norm(pred_light_pos - gt_light_pos[0])
@@ -373,7 +361,10 @@ def validate(args):
         position_losses.append(position_loss)
         position_loss_percentages.append(position_loss / all_scale[0])
 
-    with open(os.path.join(output_dir, f"position_losses_{split}.txt"), "w") as f:
+    wandb.log({"val_mean_position_loss": np.mean(position_losses)})
+    wandb.log({"val_mean_position_loss_percentage": np.mean(position_loss_percentages)})
+
+    with open(os.path.join(args.output_dir, f"position_losses_{args.split}.txt"), "w") as f:
         f.write(f"Average position loss: {np.mean(position_losses)}\n")
         f.write(f"Average position loss percentage: {np.mean(position_loss_percentages)}\n")
         f.write(f"Medium position loss percentage: {np.median(position_loss_percentages)}\n")

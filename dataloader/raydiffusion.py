@@ -10,22 +10,30 @@ from generate_rays import readRaysFromFile
 
 
 class RayDiffusionData(Dataset):
-    def __init__(self, data_dir: str, split: str = "all", num_scenes: int = None):
+    def __init__(self, data_dir: str, split: str = "all", split_by: str = "image", num_scenes: int = 0, num_lights: int = 0):
         self.data_dir = data_dir
         self.image_file_list = []
         num_patches_x, num_patches_y = 0, 0
         scene_dirs = glob(os.path.join(data_dir, "scene*"))
         scene_dirs = sorted(scene_dirs)
-        if num_scenes is not None:
-            scene_dirs = scene_dirs[:num_scenes]
+        if num_scenes == 0:
+            num_scenes = len(scene_dirs)
+        scene_dirs = scene_dirs[:num_scenes]
         for scene_dir in scene_dirs:
             light_dirs = glob(os.path.join(scene_dir, "light*"))
             light_dirs = sorted(light_dirs)
-            # light_dirs = (
-            #     light_dirs[: int(len(light_dirs) * 0.8)]
-            #     if split == "train"
-            #     else light_dirs[int(len(light_dirs) * 0.8) :]
-            # )
+            if num_lights == 0:
+                num_lights = len(light_dirs)
+            light_dirs = light_dirs[:num_lights]
+            if split_by == "light":
+                if split == "train":
+                    light_dirs = light_dirs[:int(num_lights * 0.8)]
+                elif split == "val":
+                    light_dirs = light_dirs[int(num_lights * 0.8):]
+                elif split == "all":
+                    pass
+                else:
+                    raise ValueError(f"Split \"{split}\" not recognized.")
             for light_dir in light_dirs:
                 params_file = os.path.join(light_dir, "params.json")
                 with open(params_file, "r") as f:
@@ -33,15 +41,16 @@ class RayDiffusionData(Dataset):
                     num_images = params["num_images"]
                     num_patches_x = params["num_patches_x"]
                     num_patches_y = params["num_patches_y"]
-
-                if split == "train":
-                    idx_range = range(int(num_images * 0.8))
-                elif split == "val":
-                    idx_range = range(int(num_images * 0.8), num_images)
-                elif split == "all":
-                    idx_range = range(num_images)
-                else:
-                    raise ValueError(f"Split \"{split}\" not recognized.")
+                idx_range = range(num_images)
+                if split_by == "image":
+                    if split == "train":
+                        idx_range = range(int(num_images * 0.8))
+                    elif split == "val":
+                        idx_range = range(int(num_images * 0.8), num_images)
+                    elif split == "all":
+                        pass
+                    else:
+                        raise ValueError(f"Split \"{split}\" not recognized.")
 
                 for image_file in [
                     os.path.join(light_dir, f"image{i}.exr") for i in idx_range
@@ -52,7 +61,7 @@ class RayDiffusionData(Dataset):
         self.num_patches_x = num_patches_x
         self.num_patches_y = num_patches_y
 
-        print(f"Loaded RayDiffusion {split} data from {data_dir}. Totally {len(self)} images from {len(scene_dirs)} scenes.")
+        print(f"Loaded RayDiffusion {split} data from {data_dir}. Totally {len(self)} images from {len(scene_dirs)} * {len(light_dirs)} scenes.")
 
     def __len__(self):
         return len(self.image_file_list)
