@@ -11,5 +11,5 @@ num_scenes = 1
 num_lights = 0
 output_dir = "output"
 split = "val"
-split_by = "light"
-eval_interval = 5
+split_by = "image"
+eval_interval = 10
