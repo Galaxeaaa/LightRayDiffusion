@@ -21,6 +21,7 @@ class RayDiffuser(nn.Module):
         feature_extractor="dino",
         append_ndc=True,
         use_unconditional=False,
+        ray_dim=6,
     ):
         super().__init__()
         if noise_scheduler is None:
@@ -28,7 +29,7 @@ class RayDiffuser(nn.Module):
         else:
             self.noise_scheduler = noise_scheduler
 
-        self.ray_dim = 6
+        self.ray_dim = ray_dim
 
         self.append_ndc = append_ndc
         self.width = width

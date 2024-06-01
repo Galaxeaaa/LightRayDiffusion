@@ -27,6 +27,16 @@ def intersect_skew_lines_high_dim(p, r, mask=None):
         return None, None
     return p_intersect, r
 
+    
+def rays2Point(p, d):
+    p = torch.tensor(p)
+    d = torch.tensor(d)
+    mask = torch.linalg.norm(d, dim=-1) > 1e-5
+
+    p_intersect, _ = intersect_skew_lines_high_dim(p, d, mask)
+    
+    return p_intersect
+
 
 def pluckerRays2Point(plucker_rays):
     """

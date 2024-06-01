@@ -70,6 +70,13 @@ class RayDiffusionData(Dataset):
         image_file = self.image_file_list[idx]
         image_idx = int(os.path.splitext(os.path.basename(image_file))[0].split("image")[1])
         parent_dir = os.path.dirname(image_file)
+
+        # Get depth
+        depth_dir = os.path.join(os.path.dirname(parent_dir), "depth")
+        with open(os.path.join(depth_dir, f"depth{image_idx}.txt"), "r") as f:
+            h, w = map(int, f.readline().split())
+            depth = np.array([float(line) for line in f.readlines()], dtype=np.float32).reshape(self.num_patches_y, self.num_patches_x)
+
         params_file = os.path.join(parent_dir, "params.json")
         rays_file = os.path.join(parent_dir, f"rays{image_idx}.txt")
         with open(params_file, "r") as f:
@@ -99,4 +106,4 @@ class RayDiffusionData(Dataset):
             ]
             camera_lookat_mat = np.array(camera_lookat_mat)
 
-        return image, rays, light_center, camera_lookat_mat, origin, scale
+        return image, rays, light_center, camera_lookat_mat, origin, scale, depth

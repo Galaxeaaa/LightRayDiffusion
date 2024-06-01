@@ -1,24 +1,33 @@
 import io
 import os
 import os.path as osp
-
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from PIL import Image
 
 
+def visualizeDirection(dirs):
+    """
+    dirs: (H, W, 3), H = num_patches_y, W = num_patches_x
+    """
+    dirs = np.array(dirs)
+    images = dirs
+    images = (images + 1) * 255 // 2
+    images = images.astype(np.uint8)
+    return images  # (N, H, W, 3)
+
+
 def visualizeRays(rays):
-    '''
+    """
     rays: (H, W, 6), H = num_patches_y, W = num_patches_x
-    '''
+    """
     rays = np.array(rays)
     direction_imgs = rays[..., :3]
     moment_imgs = rays[..., 3:]
     images = np.concatenate([direction_imgs, moment_imgs], axis=-2)
     images = (images + 1) * 255 // 2
     images = images.astype(np.uint8)
-
     return images  # (N, H, W, 6)
 
 
@@ -61,7 +70,6 @@ def view_color_coded_images_from_path(image_dir):
     image_paths = list(filter(hidden, image_paths))
     image_paths = image_paths[0 : (min(len(image_paths), 8))]
     num_frames = len(image_paths)
-
     for i in range(num_rows * num_cols):
         if i < num_frames:
             img = np.asarray(Image.open(osp.join(image_dir, image_paths[i])))
@@ -114,7 +122,6 @@ def view_color_coded_images_from_path(image_dir):
     image_paths = list(filter(hidden, image_paths))
     image_paths = image_paths[0 : (min(len(image_paths), 8))]
     num_frames = len(image_paths)
-
     for i in range(num_rows * num_cols):
         if i < num_frames:
             img = np.asarray(Image.open(osp.join(image_dir, image_paths[i])))

@@ -174,6 +174,51 @@ if __name__ == "__main__":
 
         scene = mi.load_dict(scene_dict)
 
+        # Render depth
+        params = mi.traverse(scene)
+        for i_view in range(len(dataset)):
+            cam_lookat_mat = dataset[i_view]["camera_lookat_mat"]
+            camera_extrinsics = mi.ScalarTransform4f.look_at(
+                origin=cam_lookat_mat[0], target=cam_lookat_mat[1], up=cam_lookat_mat[2]
+            )
+            params["sensor.to_world"] = camera_extrinsics
+            params.update()
+
+            # Generate rays
+            rays = []
+            pixel_positions = []
+            for x in range(num_patches_y):
+                for y in range(num_patches_x):
+                    x_ = x * cell_h + cell_h // 2
+                    y_ = y * cell_w + cell_w // 2
+                    u = x_ / res_h
+                    v = y_ / res_w
+                    pixel_pos = intersectCameraRayWithScene(
+                        u=u,
+                        v=v,
+                        fov=scene_dict["sensor"]["fov"],
+                        aspect_ratio=res_h / res_w,
+                        camera_extrinsics=camera_extrinsics,
+                        scene=scene,
+                    )
+                    pixel_positions.append(pixel_pos)
+            pixel_positions = np.array(pixel_positions).reshape(num_patches_y, num_patches_x, 3)
+            depth = np.linalg.norm(pixel_positions - cam_lookat_mat[0], axis=-1)
+            depth[np.isnan(depth)] = 0
+            # write as txt
+            depth_file = os.path.join(cwd, "data", "RayDiffusionData", data_group_name, scene_name, "depth", f"depth{i_view}.txt")
+            if not os.path.exists(os.path.dirname(depth_file)):
+                os.makedirs(os.path.dirname(depth_file), exist_ok=True)
+            with open(depth_file, "w") as f:
+                f.write(f"{num_patches_x} {num_patches_y}\n")
+                for x in range(num_patches_y):
+                    for y in range(num_patches_x):
+                        f.write(f"{depth[x, y]}\n")
+        
+        
+
+        continue
+
         # for i_light in range(num_lights_per_scene):
         for i_light in [light_idx]:
             params = mi.traverse(scene)
