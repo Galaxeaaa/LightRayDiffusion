@@ -218,22 +218,8 @@ def train(args):
     # for i in range(rays_vis.shape[0]):
     #     imageio.imwrite(os.path.join(output_dir, "visualization", f"vis{i}.png"), rays_vis[i])
 
-    # config_file = os.path.join(output_dir, "config.json")
-    # config = {
-    #     "learning_rate": learning_rate,
-    #     "lr_scheduler": lr_scheduler,
-    #     "lr_scheduler_gamma": lr_scheduler_gamma,
-    #     "data_dir": data_dir,
-    #     "n_loaded_images": len(train_data),
-    #     "n_iteration": epoch,
-    #     "max_n_epochs": max_n_epochs,
-    #     "num_patches_x": num_patches_x,
-    #     "num_patches_y": num_patches_y,
-    #     "model": {
-    #         "max_num_images": max_num_images,
-    #     },
-    # }
-    # json.dump(config, open(config_file, "w"), indent=4, sort_keys=True)
+    config_file = os.path.join(args.output_dir, "config.json")
+    json.dump(vars(args), open(config_file, "w"), indent=4, sort_keys=True)
 
 
 def validate(args, model=None, write_details=True):

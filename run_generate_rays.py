@@ -8,6 +8,6 @@ with open("usable_scenes_xml.txt", "r") as f:
 i_start = scene_names.index("scene0024_01")
 
 # for scene_idx in tqdm(range(i_start, len(scene_names))):
-for scene_idx in tqdm(range(10)):
-    for light_idx in range(3):
+for scene_idx in tqdm(range(30, len(scene_names))):
+    for light_idx in range(1):
         os.system(f"python generate_rays.py {scene_idx} {light_idx}")
