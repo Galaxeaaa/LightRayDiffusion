@@ -184,12 +184,9 @@ def train(args):
     os.makedirs(args.output_dir, exist_ok=True)
     torch.save(model.state_dict(), os.path.join(args.output_dir, "model.pth"))
     print(f"Model saved to {os.path.join(args.output_dir, 'model.pth')}")
-    with open(os.path.join(args.output_dir, "losses.txt"), "w") as f:
-        for loss in losses:
-            f.write(f"{loss}\n")
-    losses = np.array(losses)
-    losses = losses[losses > 0]
-    losses = np.log(losses)
+
+    config_file = os.path.join(args.output_dir, "config.json")
+    json.dump(vars(args), open(config_file, "w"), indent=4, sort_keys=True)
 
 
 def validate(args, model=None, write_details=True):
