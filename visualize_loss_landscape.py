@@ -40,12 +40,12 @@ if __name__ == "__main__":
         if "emitter" in obj:
             obj.pop("emitter")
 
-    init_light_position = [2, 0, 0]
+    gt_light_position = [0, 0, 0]
     light_color = [1, 3, 3]
     # Create a point light placeholder. The actual center and intensity will be set later in parameters
     scene_dict["emitter_opt"] = {
         "type": "point",
-        "position": init_light_position,
+        "position": gt_light_position,
         "intensity": {
             "type": "rgb",
             "value": light_color,
@@ -60,40 +60,26 @@ if __name__ == "__main__":
     scene = mi.load_dict(scene_dict)
 
     gt_image = mi.Bitmap(gt_filename)
-    display(mi.util.convert_to_bitmap(gt_image))
-
+    # gt_image = mi.render(scene, spp=528)
+    # mi.util.write_bitmap("gt.exr", gt_image, "rgb")
+    # exit(0)
 
     params = mi.traverse(scene)
 
-    init_image = mi.render(scene, params, spp=128)
-    display(mi.util.convert_to_bitmap(init_image))
-
-    opt = mi.ad.Adam(lr=0.05)
-    opt["light_translate"] = mi.Point3f(0, 0, 0)
-    # params.update(opt)
-
-    images = []
-    loss_hist = []
-
-    pbar = tqdm(range(100))
-    for i in pbar:
-        image = mi.render(scene, params, spp=4)
-        images.append(image)
-        loss = dr.mean(dr.abs(image - gt_image))
-
-        dr.backward(loss)
-        opt.step()
-        # params.update(opt)
-        params["emitter_opt.position"] += opt["light_translate"]
-
-        pbar.set_description(f"Loss: {loss[0]:.5f}.")
-        loss_hist.append(loss[0])
-
-    # generate video using imageio
-    images = [mi.util.convert_to_bitmap(img) for img in images]
-    imageio.mimsave("test.mp4", images, duration=100)
-
-    # display loss history
-    plt.plot(loss_hist)
+    vis_res = 6
+    losses = []
+    progress_bar = tqdm(total=vis_res ** 2)
+    for y in np.linspace(1, -1, vis_res):
+        for z in np.linspace(1, -1, vis_res):
+            params["emitter_opt.position"] = [2, y, z]
+            image = mi.render(scene, params, spp=8)
+            # mi.util.write_bitmap(f"tmp_{y}_{z}.exr", image, "rgb")
+            loss = np.mean(np.abs(image - gt_image))
+            losses.append(loss)
+            progress_bar.update(1)
+    
+    print(losses)
+    
+    losses = np.array(losses, dtype=np.float32).reshape(vis_res, vis_res)
+    plt.imshow(losses, cmap="viridis")
     plt.show()
-    plt.savefig("loss.png")
