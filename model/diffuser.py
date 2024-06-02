@@ -22,6 +22,7 @@ class RayDiffuser(nn.Module):
         append_ndc=True,
         use_unconditional=False,
         ray_dim=6,
+        num_heads=16,
     ):
         super().__init__()
         if noise_scheduler is None:
@@ -61,6 +62,7 @@ class RayDiffuser(nn.Module):
                 depth=depth,
                 hidden_size=hidden_size,
                 max_num_images=max_num_images,
+                num_heads=num_heads,
                 P=P,
             )
         else:

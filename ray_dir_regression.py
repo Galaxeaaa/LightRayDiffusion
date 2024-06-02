@@ -43,6 +43,7 @@ def getParser():
     parser.add_argument("--num_images", type=int, default=8)
     parser.add_argument("--num_scenes", type=int, default=None)
     parser.add_argument("--num_lights", type=int, default=None)
+    parser.add_argument("--num_heads", type=int, default=16)
     parser.add_argument("--output_dir", type=none_or_str, default="output")
     parser.add_argument("--split", type=none_or_str, default="val")
     parser.add_argument("--split_by", type=none_or_str, default="image")
@@ -125,6 +126,7 @@ def train(args):
         feature_extractor="dino",
         append_ndc=True,
         ray_dim=3,
+        num_heads=args.num_heads,
     ).to(device)
     t = model.noise_scheduler.max_timesteps
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
@@ -210,7 +212,7 @@ def validate(args, model=None, write_details=True):
             config = json.load(f)
             num_patches_x = config["num_patches_x"]
             num_patches_y = config["num_patches_y"]
-            max_num_images = config["model"]["max_num_images"]
+            max_num_images = config["max_num_images"]
         noise_scheduler = NoiseScheduler(
             type="linear",
             max_timesteps=100,
@@ -227,6 +229,7 @@ def validate(args, model=None, write_details=True):
             feature_extractor="dino",
             append_ndc=True,
             ray_dim=3,
+            num_heads=config["num_heads"],
         ).to(device)
 
         model.load_state_dict(torch.load(args.model_dir))
