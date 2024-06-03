@@ -92,7 +92,7 @@ def transformToWorldSpace(p, cam_mat, origin):
 
 def train(args):
     args.exp_name = "dir_regression"
-    wandb.init(project="RayDiffusion", config=vars(args))
+    wandb.init(project="RayDiffusion", config=vars(args), name=f"{args.exp_name}-{args.num_scenes}")
     # load data
     train_data = RayDiffusionData(
         args.data_dir,
