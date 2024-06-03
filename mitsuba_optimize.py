@@ -20,28 +20,28 @@ from utils.visualization import display
 if __name__ == "__main__":
     idx_view = 0
     cwd = "."
-    scene_name = "scene0001_01"
+    scene_name = "scene0013_00"
     res_h = 420
     res_w = 560
     light_idx = 5
 
     data_dir = os.path.join(cwd, "data/scenes_on_cluster/xml", scene_name)
     xml_filename = os.path.join(data_dir, "main.xml")
-    gt_filename = os.path.join(cwd, "gt.exr")
+    gt_filename = os.path.join(cwd, "gt_0013.exr")
     dataset = OpenRoomsSceneData(data_dir=data_dir)
     # Set up sensor and integrator
     scene_dict = convertXML2Dict(xml_filename)
     scene_dict["sensor"]["film"]["height"] = res_h
     scene_dict["sensor"]["film"]["width"] = res_w
-    scene_dict["integrator"]["type"] = "prb"
+    scene_dict["integrator"]["type"] = "prb_projective"
     # Remove all emitters
     scene_dict.pop("env_emitter")
     for obj in scene_dict.values():
         if "emitter" in obj:
             obj.pop("emitter")
 
-    init_light_position = [2, 0, 0]
-    light_color = [1, 3, 3]
+    init_light_position = [0, 2, 0]
+    light_color = [1, 1, 1]
     # Create a point light placeholder. The actual center and intensity will be set later in parameters
     scene_dict["emitter_opt"] = {
         "type": "point",

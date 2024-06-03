@@ -10,6 +10,6 @@ num_images = 8
 num_scenes = 1
 num_lights = 1
 output_dir = "output"
-split = "train"
+split = "val"
 split_by = "image"
 eval_interval = 5
