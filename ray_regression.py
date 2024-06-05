@@ -105,6 +105,8 @@ def train(args):
     dataloader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
     num_patches_x = train_data.num_patches_x
     num_patches_y = train_data.num_patches_y
+    args.num_patches_x = num_patches_x
+    args.num_patches_y = num_patches_y
 
     # detect if cuda is available
     if torch.cuda.is_available():
@@ -142,7 +144,7 @@ def train(args):
     for i in progress_bar:
         # for ( all_images, all_rays, all_light_centers, all_cam_mats, all_origins, all_scale,) in dataloader:
         losses = []
-        for all_images, all_rays, _, _, _, _ in dataloader:
+        for all_images, all_rays, _, _, _, _, _ in dataloader:
             all_images = (
                 all_images.unsqueeze(1).permute(0, 1, 4, 2, 3).to(device)
             )  # (B, H, W, 3) -> (B, N, 3, H, W)
@@ -239,7 +241,7 @@ def validate(args, model=None, write_details=True):
             config = json.load(f)
             num_patches_x = config["num_patches_x"]
             num_patches_y = config["num_patches_y"]
-            max_num_images = config["model"]["max_num_images"]
+            max_num_images = config["max_num_images"]
 
         noise_scheduler = NoiseScheduler(
             type="linear",
@@ -287,6 +289,7 @@ def validate(args, model=None, write_details=True):
         all_cam_mats,
         all_origins,
         all_scale,
+        all_depth,
     ) in progress_bar:
         all_images = all_images.unsqueeze(0).permute(0, 1, 4, 2, 3).to(device)
         all_rays = all_rays.unsqueeze(0).permute(0, 1, 4, 2, 3).to(device)

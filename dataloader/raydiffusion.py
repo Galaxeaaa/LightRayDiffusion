@@ -16,6 +16,8 @@ class RayDiffusionData(Dataset):
         num_patches_x, num_patches_y = 0, 0
         scene_dirs = glob(os.path.join(data_dir, "scene*"))
         scene_dirs = sorted(scene_dirs)
+        if split == "one":
+            scene_dirs = scene_dirs[num_scenes : num_scenes + 1]
         if num_scenes == 0:
             num_scenes = len(scene_dirs)
         scene_dirs = scene_dirs[:num_scenes]
@@ -28,7 +30,7 @@ class RayDiffusionData(Dataset):
             if split_by == "light":
                 if split == "train":
                     light_dirs = light_dirs[:int(num_lights * 0.8)]
-                elif split == "val":
+                elif split == "val" or split == "one":
                     light_dirs = light_dirs[int(num_lights * 0.8):]
                 elif split == "all":
                     pass
@@ -45,7 +47,7 @@ class RayDiffusionData(Dataset):
                 if split_by == "image":
                     if split == "train":
                         idx_range = range(int(num_images * 0.8))
-                    elif split == "val":
+                    elif split == "val" or split == "one":
                         idx_range = range(int(num_images * 0.8), num_images)
                     elif split == "all":
                         pass

@@ -105,6 +105,8 @@ def train(args):
     dataloader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
     num_patches_x = train_data.num_patches_x
     num_patches_y = train_data.num_patches_y
+    args.num_patches_x = num_patches_x
+    args.num_patches_y = num_patches_y
     # detect if cuda is available
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
